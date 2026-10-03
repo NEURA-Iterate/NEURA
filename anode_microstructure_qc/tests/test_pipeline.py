@@ -2,10 +2,10 @@ import numpy as np
 import pytest
 from conftest import make_synthetic
 
-from si_graphite_bse.config import Config
-from si_graphite_bse.kpis import compute_kpis, homogeneity_cv
-from si_graphite_bse.pipeline import segment_image
-from si_graphite_bse.segment import PORE, SI
+from anode_qc.config import Config
+from anode_qc.kpis import compute_kpis, homogeneity_cv
+from anode_qc.pipeline import segment_image
+from anode_qc.segment import PORE, SI
 
 
 def _iou(a, b):
@@ -81,7 +81,7 @@ def test_config_roundtrip(tmp_path):
 def test_batch_stats_handles_constant_kpi():
     import pandas as pd
 
-    from si_graphite_bse.report import batch_stats
+    from anode_qc.report import batch_stats
 
     df = pd.DataFrame(
         {

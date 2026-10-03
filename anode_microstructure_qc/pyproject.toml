@@ -3,9 +3,9 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "si-graphite-bse"
+name = "anode-microstructure-qc"
 version = "0.1.0"
-description = "Silicon / graphite / pore segmentation and KPIs for BSE SEM images of Si-graphite anodes"
+description = "Si / graphite anode microstructure QC: multi-detector SEM segmentation (BSE, ETD, Inlens), QC KPIs and uncertainty"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
@@ -24,7 +24,7 @@ dependencies = [
 dev = ["pytest>=7", "ruff>=0.4"]
 
 [project.scripts]
-sgb = "si_graphite_bse.cli:main"
+anode-qc = "anode_qc.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

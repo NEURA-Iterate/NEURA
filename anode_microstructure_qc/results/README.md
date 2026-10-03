@@ -1,6 +1,6 @@
 # Results: full 31-image run (BSE + ETD/SE + Inlens)
 
-Produced by `python -m si_graphite_bse.cli run --data <Hackathon-Polaron> --out <dir> --workers 4 --mc-runs 0` with the
+Produced by `python -m anode_qc.cli run --data <Hackathon-Polaron> --out <dir> --workers 4 --mc-runs 0` with the
 settings in `config_used.yaml`. Images per batch: Batch_1 = 7, Batch_2 = 7, Batch_3 = 17.
 The algorithm-uncertainty Monte Carlo was not run here, so only pixel-ambiguity intervals (`*_pix_lo` / `*_pix_hi`) are included.
 

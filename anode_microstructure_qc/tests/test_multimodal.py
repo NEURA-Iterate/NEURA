@@ -4,20 +4,20 @@ import pytest
 from conftest import make_synthetic
 from skimage.draw import disk, line
 
-from si_graphite_bse.config import Config
-from si_graphite_bse.data import BSEImage
-from si_graphite_bse.kpis import clustering_index, dispersion_index, graphite_alignment, kpis_from_labels
-from si_graphite_bse.montecarlo import (
+from anode_qc.config import Config
+from anode_qc.data import BSEImage
+from anode_qc.kpis import clustering_index, dispersion_index, graphite_alignment, kpis_from_labels
+from anode_qc.montecarlo import (
     PARAM_RANGES,
     apply_settings,
     batch_robustness,
     draw_settings,
     param_name,
 )
-from si_graphite_bse.multimodal import veto_porous_si
-from si_graphite_bse.pipeline import segment_image
-from si_graphite_bse.segment import CBD, GAP, PORE, SI
-from si_graphite_bse.uncertainty import pixel_intervals
+from anode_qc.multimodal import veto_porous_si
+from anode_qc.pipeline import segment_image
+from anode_qc.segment import CBD, GAP, PORE, SI
+from anode_qc.uncertainty import pixel_intervals
 
 
 def make_multimodal(seed=0):

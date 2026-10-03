@@ -1,4 +1,4 @@
-"""Command-line entry point: ``sgb download | run | report``."""
+"""Command-line entry point: ``anode-qc download | run | report``."""
 
 from __future__ import annotations
 
@@ -147,7 +147,7 @@ def run(
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(prog="sgb", description=__doc__)
+    ap = argparse.ArgumentParser(prog="anode-qc", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser(
         "download", help="download BSE / ETD / Inlens images from Hugging Face (needs HF_TOKEN)"

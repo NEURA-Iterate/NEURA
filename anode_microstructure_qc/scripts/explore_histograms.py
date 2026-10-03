@@ -8,8 +8,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from si_graphite_bse.data import find_bse_images, load_bse
-from si_graphite_bse.preprocess import denoise, estimate_normalisation, normalise, smoothed_histogram
+from anode_qc.data import find_bse_images, load_bse
+from anode_qc.preprocess import denoise, estimate_normalisation, normalise, smoothed_histogram
 
 root, out = Path(sys.argv[1]), Path(sys.argv[2])
 imgs = find_bse_images(root)

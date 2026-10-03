@@ -1,4 +1,4 @@
-# si_graphite_bse: Si / graphite anode QC from BSE, ETD and Inlens SEM images
+# anode_microstructure_qc: Si / graphite anode QC from BSE, ETD and Inlens SEM images
 
 Labels every pixel of a backscattered-electron (BSE) SEM image as **pore**, **graphite** or **silicon**, refined
 with the ETD and Inlens images of the same field of view into **pore**, **graphite**, **Si**, **binder/carbon-black
@@ -9,15 +9,15 @@ follows atomic number, so Si (Z=14) appears bright, graphite (Z=6) mid-grey and 
 ## Quick start
 
 ```bash
-cd si_graphite_bse
+cd anode_microstructure_qc
 pip install -e ".[dev]"
 export HF_TOKEN=...              # read access to gabrielgramicelli/NEURA-iterate-hack (private)
-sgb download --dest data         # BSE + ETD/SE + Inlens images
-sgb run --data data --out outputs --mc-runs 20
+anode-qc download --dest data         # BSE + ETD/SE + Inlens images
+anode-qc run --data data --out outputs --mc-runs 20
 # outputs/report/report.md is the summary
 ```
 
-`sgb run --limit 2` processes only the first 2 images; `--bse-only` ignores ETD/Inlens; `--mc-runs 0` and
+`anode-qc run --limit 2` processes only the first 2 images; `--bse-only` ignores ETD/Inlens; `--mc-runs 0` and
 `--no-pixel-uncertainty` skip the two uncertainty estimates (the Monte Carlo reruns the whole pipeline per
 setting and dominates run time); `--config my.yaml` overrides any value in
 [`configs/default.yaml`](configs/default.yaml) (unspecified values keep their defaults). Set
