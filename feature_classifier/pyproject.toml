@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neura-feature-classifier"
+version = "0.1.0"
+description = "Frozen DINOv2 features and learned pixel-wise phase segmentation heads"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "torch>=2.1",
+    "transformers>=4.40,<6",
+    "scipy>=1.10",
+    "scikit-image>=0.21",
+    "scikit-learn>=1.3",
+    "tifffile>=2023.1",
+    "pillow>=9",
+    "pandas>=2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["phaseseg*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: downloads public model weights or performs a remote model check"]
+addopts = "-m 'not slow'"
