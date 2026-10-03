@@ -39,3 +39,10 @@ analyse_batch.py: run the same fixed pipeline on all nine test samples
 The EM and encoder owners can work in parallel against the same sample IDs and feature table. Add either branch to the final score only if whole-sample validation improves results or resolves a clear failure of the KPI baseline. Do not train a transformer from scratch on this dataset.
 
 These Python files are interface placeholders only; no pipeline is implemented yet.
+
+To run data pipeline:
+
+```
+pip install numpy scipy pillow
+python3 prepare_dataset.py Result Batch_1 Batch_2 Batch_3
+```
