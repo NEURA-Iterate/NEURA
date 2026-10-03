@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import time
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
@@ -238,6 +239,7 @@ def main() -> None:
     metadata = _metadata(args.model_id, backbone, args.tile, args.overlap, args.batch_size)
     args.out.mkdir(parents=True, exist_ok=True)
     for image in find_bse_images(args.images):
+        image_started = time.perf_counter()
         triplet = load_triplet(image)
         features = extract_tiled_features(
             backbone,
@@ -247,7 +249,8 @@ def main() -> None:
             batch_size=args.batch_size,
         )
         save_features(args.out, image.image_id, features, metadata)
-        print(f"{image.image_id}: {features.shape}")
+        elapsed = time.perf_counter() - image_started
+        print(f"{image.image_id}: {features.shape} elapsed={elapsed:.2f}s")
 
 
 if __name__ == "__main__":
