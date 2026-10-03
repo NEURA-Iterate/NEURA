@@ -129,3 +129,22 @@ detection limits: `reports/batch_difference_and_reliability.md`.
 python batch_difference_test.py --features features_real.csv --out batch_difference.csv
 python kpi_reliability.py --manifest sample_manifest.csv --out kpi_reliability.csv
 ```
+
+## Augmented tile training (`augment_train.py`, `finetune_tiles.py`)
+
+Trains on aggressively augmented tiles while still holding out whole samples.
+`augment_train.py` caches frozen-DINOv2 embeddings of every tile plus `--n-aug`
+augmented copies (flips, 90° rotations, random crop/rescale; `--photometric`
+adds gamma/contrast/brightness/noise/blur), then fits a logistic head per
+leave-one-sample-out fold and runs the same pipeline on sample-level shuffled
+labels.  `finetune_tiles.py` fine-tunes an ImageNet ResNet-18 end to end on the
+augmented tiles with grouped folds (one held-out sample per batch per fold);
+`--shuffle-seed N` runs the label-shuffle control.  Results:
+`reports/augmented_training_test.md`.
+
+```bash
+python augment_train.py cache --manifest sample_manifest.csv --out cache/dino_aug --n-aug 6 --photometric
+python augment_train.py eval --cache cache/dino_aug --batches 1,2 --out expA_b12.csv
+python finetune_tiles.py --manifest sample_manifest.csv --view BSE --batches 1,2 --epochs 8 --out expB_bse.csv
+python finetune_tiles.py --manifest sample_manifest.csv --view BSE --batches 1,2 --epochs 8 --shuffle-seed 0 --out expB_bse_shuf0.csv
+```
