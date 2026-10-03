@@ -109,3 +109,16 @@ python encoder.py --manifest sample_manifest.csv --model dinov2_vits14 --out fea
 python evaluation.py --features features_emb_dinov2.csv --feature-prefix emb__ --method cosine --out eval_emb
 python embedding_probe.py --embeddings features_emb_dinov2.csv --targets features_real.csv
 ```
+
+## Population tests, KPI reliability and detection limits
+
+`batch_difference_test.py` asks whether two batches differ at all (energy-distance
+permutation test, exact for 7 v 7, plus a baseline self-split "no change" band);
+`kpi_reliability.py` recomputes every KPI on the two halves of each image to find
+which KPIs are stable enough to compare batches with. Results and the implied
+detection limits: `reports/batch_difference_and_reliability.md`.
+
+```bash
+python batch_difference_test.py --features features_real.csv --out batch_difference.csv
+python kpi_reliability.py --manifest sample_manifest.csv --out kpi_reliability.csv
+```

@@ -1,0 +1,4 @@
+pair,n_a,n_b,energy_distance,p_value,n_splits,self_split_p95_batch_1,self_split_p95_batch_2,self_split_p95_batch_3
+1 vs 2,7,7,2.572,0.2593,3432,29.353,11.535,
+1 vs 3,7,17,12.193,0.0004,5000,29.343,,5.007
+2 vs 3,7,17,8.144,0.0042,5000,,14.91,5.658
