@@ -40,6 +40,13 @@ The EM and encoder owners can work in parallel against the same sample IDs and f
 
 These Python files are interface placeholders only; no pipeline is implemented yet.
 
+To run data pipeline:
+
+```
+pip install numpy scipy pillow
+python3 prepare_dataset.py Result Batch_1 Batch_2 Batch_3
+```
+
 ## Evaluation harness (`evaluation.py`)
 
 Sample-level leave-one-out: every labelled sample (all its views and patches,

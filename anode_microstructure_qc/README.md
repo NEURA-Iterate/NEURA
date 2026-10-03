@@ -108,6 +108,23 @@ The three detectors share the same pixel grid (checked: zero shift on all 31 fie
 Supporting values: `frac_*`, `si_ecd_d10`, `si_count_per_mpx`, `si_cv_w*`, `si_fraction_particles_clustered`,
 graphite size/shape, and `qc_*` fields (thresholds, edge blur, detector agreement, streaks, charging).
 
+## Foundation-model segmentation (experimental, `dinoseg.py`)
+
+Frozen DINO backbone (DINOv3 ViT-S/16 via `transformers`, falling back to DINOv2-small while the DINOv3
+weights are gated) plus a small trained decoder:
+
+1. `scripts/dino_extract_features.py` runs the frozen backbone on BSE, ETD/SE and Inlens separately at native
+   resolution in patch-aligned tiles (per-image percentile stretch, so brightness settings do not leak in) and
+   caches the patch features (`pip install -e ".[dino]"`).
+2. `FusionDecoder` concatenates the three detectors' features, reduces them (1×1 + 3×3 conv), upsamples to pixels
+   and refines boundaries with the stretched detector images. Only the decoder is trained.
+3. Training targets come from `draft_targets`: interiors of pore / graphite / Si / CBD in a draft label map,
+   with edges and gaps marked unknown. Until expert-reviewed labels exist this is the rule-based segmentation,
+   so the decoder learns those rules (not ground truth).
+4. Decoders are trained per specimen fold (all detector views of a field stay together) and the ensemble's
+   spread gives model-disagreement uncertainty; `to_labels` keeps thin ETD gaps from the dedicated detector,
+   and the existing `kpis_from_labels` computes KPIs from each member's masks.
+
 ## Limitations
 
 - Binder/carbon-black is texture-based and not validated against ground truth: rough graphite surfaces can still
