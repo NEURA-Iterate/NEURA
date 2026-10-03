@@ -44,5 +44,5 @@ To run data pipeline:
 
 ```
 pip install numpy scipy pillow
-python3 prepare_dataset.py Result Batch_1 Batch_2 Batch_3
+python3 prepare_dataset.py Result Batch_3 Batch_1 Batch_2 
 ```
