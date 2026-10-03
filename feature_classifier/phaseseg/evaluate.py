@@ -1,20 +1,28 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
+from anode_qc.config import CleanupConfig
 from anode_qc.data import BSEImage, find_bse_images
 from anode_qc.kpis import si_particles
+from skimage.morphology import remove_small_objects
 
 from . import CLASSES
 from .data import load_triplet
 from .features import feature_upsample_factor, load_features, tile_starts
 from .heads import build_head
-from .labels import IGNORE, load_scribbles, pseudo_labels
-from .train import segmentation_metrics
+from .labels import IGNORE, load_scribbles
+from .train import (
+    load_or_create_pseudo_labels,
+    prepare_pseudo_label_cache,
+    segmentation_metrics,
+)
 
 
 def sliding_window_probabilities(
@@ -91,17 +99,22 @@ def compute_phase_kpis(labels: np.ndarray, scale: float = 1.0) -> dict[str, floa
             "pore_fraction": float("nan"),
             "si_fraction_of_solids": float("nan"),
             "si_ecd_d50": float("nan"),
+            "si_ecd_d50_raw": float("nan"),
         }
     si = (labels == CLASSES.index("si")) & valid
     pore = (labels == CLASSES.index("pore")) & valid
     solids = valid & ~pore
-    particles = si_particles(si, scale)
-    d50 = float(particles["ecd"].median()) if not particles.empty else float("nan")
+    particles_raw = si_particles(si, scale)
+    filtered_si = remove_small_objects(si, min_size=CleanupConfig().si_min_area_px)
+    particles_filtered = si_particles(filtered_si, scale)
+    d50_raw = float(particles_raw["ecd"].median()) if not particles_raw.empty else float("nan")
+    d50 = float(particles_filtered["ecd"].median()) if not particles_filtered.empty else float("nan")
     return {
         "si_fraction": float(si.sum() / total),
         "pore_fraction": float(pore.sum() / total),
         "si_fraction_of_solids": float(si.sum() / max(int(solids.sum()), 1)),
         "si_ecd_d50": d50,
+        "si_ecd_d50_raw": d50_raw,
     }
 
 
@@ -129,9 +142,13 @@ def kpi_agreement(
     return result
 
 
-def _load_labels(label_spec: str, image: BSEImage) -> np.ndarray:
+def _load_labels(
+    label_spec: str,
+    image: BSEImage,
+    pseudo_cache_dir: str | Path | None = None,
+) -> np.ndarray:
     if label_spec == "pseudo":
-        return pseudo_labels(image)
+        return load_or_create_pseudo_labels(image, pseudo_cache_dir)
     label_dir = Path(label_spec)
     label_path = next(
         (label_dir / f"{image.image_id}{suffix}" for suffix in (".npy", ".png")
@@ -153,13 +170,23 @@ def evaluate_checkpoint(
     tile_size: int = 224,
     overlap: int = 56,
     scale: float = 1.0,
+    label_cache: str | Path | None = None,
+    split_json: str | Path | None = None,
+    split_role: str = "test",
+    save_predictions: bool = False,
 ) -> tuple[pd.DataFrame, dict]:
     device = torch.device("cuda" if device == "auto" and torch.cuda.is_available() else "cpu") if device == "auto" else torch.device(device)
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     head = build_head(checkpoint["head"], checkpoint["in_dim"], checkpoint["n_classes"]).to(device)
     head.load_state_dict(checkpoint["state_dict"])
     head.eval()
-    held_out = set(checkpoint.get("validation_image_ids", []))
+    if split_json is None:
+        held_out = set(checkpoint.get("validation_image_ids", []))
+    else:
+        split = json.loads(Path(split_json).read_text(encoding="utf-8"))
+        if split_role not in split:
+            raise ValueError(f"Split file {split_json} has no {split_role!r} image ids")
+        held_out = set(split[split_role])
     if not held_out:
         raise ValueError(f"{checkpoint_path} does not record held-out image IDs")
     data = {image.image_id: image for image in find_bse_images(Path(images_dir))}
@@ -168,12 +195,29 @@ def evaluate_checkpoint(
         raise FileNotFoundError(f"Checkpoint validation images missing from {images_dir}: {missing}")
 
     rows = []
+    target_cache_dir = (
+        prepare_pseudo_label_cache(label_cache, ignore_boundary_px=2)
+        if label_cache is not None and labels == "pseudo"
+        else None
+    )
+    rule_cache_dir = (
+        prepare_pseudo_label_cache(label_cache, ignore_boundary_px=0)
+        if label_cache is not None
+        else None
+    )
+    prediction_dir = Path(output_dir) / "predictions" if save_predictions else None
+    if prediction_dir is not None:
+        prediction_dir.mkdir(parents=True, exist_ok=True)
     for image_id in sorted(held_out):
         image = data[image_id]
         triplet = load_triplet(image)
         features = load_features(features_dir, image_id, triplet.shape[-2:])
-        target = _load_labels(labels, image)
-        rule_labels = pseudo_labels(image, ignore_boundary_px=0)
+        target = _load_labels(labels, image, target_cache_dir)
+        rule_labels = load_or_create_pseudo_labels(
+            image,
+            rule_cache_dir,
+            ignore_boundary_px=0,
+        )
         if target.shape != triplet.shape[-2:] or rule_labels.shape != triplet.shape[-2:]:
             raise ValueError(f"{image_id}: labels do not match the cropped image shape")
         probabilities = sliding_window_probabilities(
@@ -186,6 +230,8 @@ def evaluate_checkpoint(
             device=device,
         )
         prediction = probabilities.argmax(axis=0).astype(np.uint8)
+        if prediction_dir is not None:
+            np.save(prediction_dir / f"{image_id}.npy", prediction, allow_pickle=False)
         accuracy, mean_iou, class_ious = segmentation_metrics(prediction, target)
         kpis = kpi_agreement(prediction, rule_labels, scale)
         row = {
@@ -213,7 +259,13 @@ def evaluate_checkpoint(
         "mean_max_probability": float(frame["mean_max_probability"].mean()),
         "mean_kpi_absolute_error": {
             name: float(frame[f"abs_error_{name}"].mean())
-            for name in ("si_fraction", "pore_fraction", "si_fraction_of_solids", "si_ecd_d50")
+            for name in (
+                "si_fraction",
+                "pore_fraction",
+                "si_fraction_of_solids",
+                "si_ecd_d50",
+                "si_ecd_d50_raw",
+            )
         },
     }
     lines = [
@@ -239,7 +291,12 @@ def main() -> None:
     parser.add_argument("--tile-size", type=int, default=224)
     parser.add_argument("--overlap", type=int, default=56)
     parser.add_argument("--scale", type=float, default=1.0, help="pixel size used by Si particle ECD")
+    parser.add_argument("--label-cache", type=Path)
+    parser.add_argument("--split-json", type=Path)
+    parser.add_argument("--split-role", choices=("train", "val", "test"), default="test")
+    parser.add_argument("--save-predictions", action="store_true")
     args = parser.parse_args()
+    torch.set_num_threads(os.cpu_count() or 1)
     _, summary = evaluate_checkpoint(
         args.images,
         args.features,
@@ -250,6 +307,10 @@ def main() -> None:
         args.tile_size,
         args.overlap,
         args.scale,
+        label_cache=args.label_cache,
+        split_json=args.split_json,
+        split_role=args.split_role,
+        save_predictions=args.save_predictions,
     )
     print(summary)
 

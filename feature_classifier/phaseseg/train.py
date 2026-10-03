@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import torch
-from anode_qc.data import find_bse_images
+from anode_qc.config import Config
+from anode_qc.data import BSEImage, find_bse_images
 from sklearn.model_selection import StratifiedKFold
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
@@ -29,6 +32,78 @@ class ImageSample:
     image: np.ndarray
     features: np.ndarray
     labels: np.ndarray
+
+
+def holdout_image_split(
+    image_ids: Sequence[str],
+    batches: Sequence[str],
+    seed: int = 0,
+) -> dict[str, list[str]]:
+    if len(image_ids) != len(batches):
+        raise ValueError("image_ids and batches must have equal length")
+    if len(set(image_ids)) != len(image_ids):
+        raise ValueError("image_ids must be unique")
+    groups: dict[str, list[str]] = {}
+    for image_id, batch in zip(image_ids, batches, strict=True):
+        groups.setdefault(batch, []).append(image_id)
+    roles = {"train": [], "val": [], "test": []}
+    rng = np.random.default_rng(seed)
+    for batch in sorted(groups):
+        ids = sorted(groups[batch])
+        if len(ids) < 3:
+            raise ValueError(f"Batch {batch} needs at least three images for train/val/test")
+        shuffled = rng.permutation(ids).tolist()
+        roles["test"].append(shuffled[0])
+        roles["val"].append(shuffled[1])
+        roles["train"].extend(shuffled[2:])
+    return roles
+
+
+def prepare_pseudo_label_cache(
+    cache_root: str | Path,
+    ignore_boundary_px: int = 2,
+    cfg: Config | None = None,
+) -> Path:
+    cfg = Config() if cfg is None else cfg
+    settings = {
+        "source": "pseudo",
+        "ignore_boundary_px": ignore_boundary_px,
+        "classes": list(CLASSES),
+        "anode_qc_config": json.loads(json.dumps(cfg.to_dict())),
+    }
+    encoded = json.dumps(settings, sort_keys=True, separators=(",", ":")).encode()
+    cache_dir = Path(cache_root) / hashlib.sha256(encoded).hexdigest()[:16]
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    settings_path = cache_dir / "settings.json"
+    if settings_path.exists():
+        if json.loads(settings_path.read_text(encoding="utf-8")) != settings:
+            raise ValueError(f"Pseudo-label cache settings do not match {settings_path}")
+    else:
+        settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return cache_dir
+
+
+def load_or_create_pseudo_labels(
+    image: BSEImage,
+    cache_dir: str | Path | None = None,
+    ignore_boundary_px: int = 2,
+    cfg: Config | None = None,
+) -> np.ndarray:
+    cfg = Config() if cfg is None else cfg
+    if cache_dir is None:
+        return pseudo_labels(image, cfg, ignore_boundary_px)
+    cache_path = Path(cache_dir) / f"{image.image_id}.npy"
+    if cache_path.exists():
+        labels = np.load(cache_path, allow_pickle=False)
+        if labels.dtype != np.uint8:
+            raise ValueError(f"Cached labels for {image.image_id} must be uint8, got {labels.dtype}")
+        return labels
+    labels = pseudo_labels(image, cfg, ignore_boundary_px).astype(np.uint8, copy=False)
+    temporary_path = cache_path.with_name(f".{cache_path.stem}.{os.getpid()}.tmp")
+    with temporary_path.open("wb") as stream:
+        np.save(stream, labels, allow_pickle=False)
+    os.replace(temporary_path, cache_path)
+    return labels
 
 
 def stratified_image_splits(
@@ -58,16 +133,30 @@ def load_training_samples(
     images_dir: str | Path,
     features_dir: str | Path,
     labels: str,
+    label_cache: str | Path | None = None,
+    image_ids: set[str] | None = None,
 ) -> list[ImageSample]:
-    images = find_bse_images(Path(images_dir))
+    all_images = find_bse_images(Path(images_dir))
+    if image_ids is not None:
+        missing = image_ids - {image.image_id for image in all_images}
+        if missing:
+            raise FileNotFoundError(f"Images not found under {images_dir}: {sorted(missing)}")
+        images = [image for image in all_images if image.image_id in image_ids]
+    else:
+        images = all_images
     if not images:
         raise ValueError(f"No BSE images found under {images_dir}")
     label_dir = None if labels == "pseudo" else Path(labels)
+    cache_dir = (
+        prepare_pseudo_label_cache(label_cache)
+        if labels == "pseudo" and label_cache is not None
+        else None
+    )
     samples = []
     for image in images:
         triplet = load_triplet(image)
         if label_dir is None:
-            label_map = pseudo_labels(image)
+            label_map = load_or_create_pseudo_labels(image, cache_dir)
         else:
             label_path = next(
                 (label_dir / f"{image.image_id}{suffix}" for suffix in (".npy", ".png")
@@ -335,7 +424,9 @@ def main() -> None:
     parser.add_argument("--images", type=Path, required=True)
     parser.add_argument("--features", type=Path, required=True)
     parser.add_argument("--labels", required=True, help="pseudo or directory of PNG/NPY label maps")
+    parser.add_argument("--label-cache", type=Path)
     parser.add_argument("--head", choices=("linear", "fusion"), default="fusion")
+    parser.add_argument("--split", choices=("kfold", "holdout"), default="kfold")
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=10)
@@ -346,15 +437,82 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    samples = load_training_samples(args.images, args.features, args.labels)
+    torch.set_num_threads(os.cpu_count() or 1)
+    args.out.mkdir(parents=True, exist_ok=True)
+    device = _select_device(args.device)
+    if args.split == "holdout":
+        images = find_bse_images(args.images)
+        split = holdout_image_split(
+            [image.image_id for image in images],
+            [image.batch for image in images],
+            seed=args.seed,
+        )
+        (args.out / "split.json").write_text(json.dumps(split, indent=2) + "\n", encoding="utf-8")
+        samples = load_training_samples(
+            args.images,
+            args.features,
+            args.labels,
+            label_cache=args.label_cache,
+            image_ids=set(split["train"] + split["val"]),
+        )
+        by_id = {sample.image_id: sample for sample in samples}
+        head, metrics = train_fold(
+            [by_id[image_id] for image_id in split["train"]],
+            [by_id[image_id] for image_id in split["val"]],
+            head_name=args.head,
+            epochs=args.epochs,
+            crop_size=args.crop_size,
+            crops_per_image=args.crops_per_image,
+            batch_size=args.batch_size,
+            device=device,
+            seed=args.seed,
+        )
+        checkpoint_path = args.out / "model.pt"
+        torch.save(
+            {
+                "state_dict": head.state_dict(),
+                "head": args.head,
+                "in_dim": int(samples[0].features.shape[-1]),
+                "n_classes": len(CLASSES),
+                "classes": CLASSES,
+                "patch_size": PATCH_SIZE,
+                "crop_size": args.crop_size,
+                "train_image_ids": split["train"],
+                "validation_image_ids": split["val"],
+                "test_image_ids": split["test"],
+            },
+            checkpoint_path,
+        )
+        summary = {
+            "head": args.head,
+            "split": "holdout",
+            "epochs": args.epochs,
+            "device": str(device),
+            "seed": args.seed,
+            "classes": CLASSES,
+            "checkpoint": checkpoint_path.name,
+            "train_image_ids": split["train"],
+            "validation_image_ids": split["val"],
+            "test_image_ids": split["test"],
+            "metrics": metrics,
+            "mean_validation_iou": metrics["mean_iou"],
+        }
+        (args.out / "metrics.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        print(f"holdout: {metrics}")
+        return
+
+    samples = load_training_samples(
+        args.images,
+        args.features,
+        args.labels,
+        label_cache=args.label_cache,
+    )
     splits = stratified_image_splits(
         [sample.image_id for sample in samples],
         [sample.batch for sample in samples],
         folds=args.folds,
         seed=args.seed,
     )
-    args.out.mkdir(parents=True, exist_ok=True)
-    device = _select_device(args.device)
     fold_metrics = []
     by_id = {sample.image_id: sample for sample in samples}
     for fold, (train_ids, validation_ids) in enumerate(splits):
