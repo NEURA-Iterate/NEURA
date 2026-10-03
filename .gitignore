@@ -2,4 +2,5 @@ __pycache__/
 *.egg-info/
 .venv/
 .DS_Store
-eval_out*/
+eval_*/
+sample_manifest.csv

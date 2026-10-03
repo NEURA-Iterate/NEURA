@@ -65,8 +65,9 @@ class ProfileDistanceScorer:
 
     name = "profile"
 
-    def __init__(self, view_weights: dict[str, float] | None = None):
+    def __init__(self, view_weights: dict[str, float] | None = None, clip_z: float = 5.0):
         self.view_weights = view_weights
+        self.clip_z = clip_z
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "ProfileDistanceScorer":
         self.columns = list(X.columns)
@@ -76,13 +77,14 @@ class ProfileDistanceScorer:
         sd = np.nanstd(values, axis=0)
         self.scale = np.where(mad > EPS, mad, np.where(sd > EPS, sd, 1.0))
         self.weights = column_weights(self.columns, self.view_weights)
-        scaled = (values - self.center) / self.scale
+        scaled = np.clip((values - self.center) / self.scale, -self.clip_z, self.clip_z)
         self.batches = sorted(y.astype(str).unique())
         self.profiles = {b: np.nanmedian(scaled[(y.astype(str) == b).to_numpy()], axis=0) for b in self.batches}
         return self
 
     def _scaled(self, x: pd.Series) -> np.ndarray:
-        return (x[self.columns].to_numpy(dtype=float) - self.center) / self.scale
+        z = (x[self.columns].to_numpy(dtype=float) - self.center) / self.scale
+        return np.clip(z, -self.clip_z, self.clip_z)
 
     def scores(self, x: pd.Series) -> dict[str, float]:
         """Lower is better."""
@@ -105,13 +107,13 @@ class GaussianScorer(ProfileDistanceScorer):
 
     name = "gaussian"
 
-    def __init__(self, view_weights: dict[str, float] | None = None, shrinkage: float = 0.5):
-        super().__init__(view_weights)
+    def __init__(self, view_weights: dict[str, float] | None = None, shrinkage: float = 0.5, clip_z: float = 5.0):
+        super().__init__(view_weights, clip_z)
         self.shrinkage = shrinkage
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "GaussianScorer":
         super().fit(X, y)
-        scaled = (X.to_numpy(dtype=float) - self.center) / self.scale
+        scaled = np.clip((X.to_numpy(dtype=float) - self.center) / self.scale, -self.clip_z, self.clip_z)
         pooled = np.nanvar(scaled, axis=0) + EPS
         self.variances = {}
         for b in self.batches:
@@ -322,7 +324,7 @@ def print_summary(summary: dict) -> None:
     if base and base.get("n_shuffles"):
         print(f"label-shuffle baseline: mean {base['mean_accuracy']:.3f}, 95th pct {base['p95_accuracy']:.3f} over {base['n_shuffles']} shuffles")
     print("confusion matrix (rows=true, cols=predicted):")
-    print(pd.DataFrame(summary["confusion_matrix"]).T.to_string())
+    print(pd.DataFrame(summary["confusion_matrix"]).to_string())
     if summary["mistakes"]:
         print(f"mistakes ({summary['n_mistakes']}):")
         for m in summary["mistakes"]:

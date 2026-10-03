@@ -74,3 +74,22 @@ Scorers are pluggable via `--method`: `profile` (robust-scaled distance to the
 per-batch median) and `gaussian` (diagonal Gaussian, shrunk variances; the
 stand-in for the EM branch). A new approach only needs `fit(X, y)`,
 `scores(x)` and `contributions(x, a, b)`.
+
+## Real KPIs from the images (`build_manifest.py`, `kpis.py`, `kpi_separation.py`)
+
+```bash
+python build_manifest.py --data-dir /path/to/Hackathon-Polaron --out sample_manifest.csv   # Batch_<id>/img_<sample>_<view>.tif; ETD and SE both -> SE view
+python kpis.py --manifest sample_manifest.csv --out features_real.csv                        # one row per sample, ~26 kpi__ + 18 qa__ columns
+python evaluation.py --features features_real.csv --feature-prefix kpi__ --out eval_real     # material KPIs only
+python kpi_separation.py --features features_real.csv --out kpi_separation.csv               # per-KPI within- vs between-batch check
+```
+
+`kpi__<view>__<name>__<unit>` columns are material descriptors (pore / bright-phase
+fraction, pore and particle size d50, solid chord lengths and anisotropy,
+orientation coherence, edge density ...). `qa__<view>__...` columns describe the
+image itself (size, mean/std grey, noise sigma) and should not differ between
+batches if acquisition was consistent; use them to spot imaging drift. Units are
+px because the TIFFs carry no pixel size.
+
+See `reports/kpi_hypothesis_test.md` for the result of running this on the
+labelled batches.
