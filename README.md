@@ -39,3 +39,38 @@ analyse_batch.py: run the same fixed pipeline on all nine test samples
 The EM and encoder owners can work in parallel against the same sample IDs and feature table. Add either branch to the final score only if whole-sample validation improves results or resolves a clear failure of the KPI baseline. Do not train a transformer from scratch on this dataset.
 
 These Python files are interface placeholders only; no pipeline is implemented yet.
+
+## Evaluation harness (`evaluation.py`)
+
+Sample-level leave-one-out: every labelled sample (all its views and patches,
+already aggregated into one row) is held out in turn; feature scaling and one
+profile per batch are fitted on the remaining samples only; the held-out sample
+is scored against every batch.
+
+```bash
+pip install -r requirements.txt
+python make_fake_features.py                 # temporary KPI table -> features_fake.csv
+python evaluation.py --features features_fake.csv --out eval_out
+python -m pytest tests
+```
+
+Input: a CSV with `sample_id`, `batch_id` (blank for unseen test samples, which
+are ignored) and numeric feature columns. Columns named
+`kpi__<view>__<name>__<unit>` are grouped so each view carries equal total weight
+(`--view-weights BSE=1,SE=1,InLens=0.5` to change). Any other numeric columns
+(e.g. `emb_0..emb_N` from `encoder.py`) are accepted as-is, so swapping the
+temporary CSV for real KPIs or embeddings needs no code change.
+
+Outputs in `--out`: `predictions.csv` (true/predicted batch, `score_batch_*`,
+margin, `review_flag` for small margins, top contributing features),
+`confusion_matrix.csv`, `mistakes.csv`, `summary.json` (accuracy, counts per
+batch, warnings, label-shuffle chance baseline).
+
+A batch that would have fewer than `--min-train-per-batch` (default 2) samples
+left after holding one out is reported in `warnings`, and its samples are marked
+`evaluable=False` rather than scored against a profile they cannot have.
+
+Scorers are pluggable via `--method`: `profile` (robust-scaled distance to the
+per-batch median) and `gaussian` (diagonal Gaussian, shrunk variances; the
+stand-in for the EM branch). A new approach only needs `fit(X, y)`,
+`scores(x)` and `contributions(x, a, b)`.
