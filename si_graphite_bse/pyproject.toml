@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "si-graphite-bse"
+version = "0.1.0"
+description = "Silicon / graphite / pore segmentation and KPIs for BSE SEM images of Si-graphite anodes"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-image>=0.21",
+    "scikit-learn>=1.3",
+    "tifffile>=2023.1",
+    "imagecodecs>=2023.1",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+    "pyyaml>=6.0",
+    "huggingface_hub>=0.20",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.scripts]
+sgb = "si_graphite_bse.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+ignore = ["E501"]  # long lines are left to `ruff format`
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
