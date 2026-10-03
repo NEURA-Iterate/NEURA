@@ -16,8 +16,8 @@ from skimage.filters import apply_hysteresis_threshold
 from .config import SegmentConfig
 from .preprocess import Normalisation, smoothed_histogram
 
-PORE, GRAPHITE, SI = 0, 1, 2
-CLASS_NAMES = {PORE: "pore", GRAPHITE: "graphite", SI: "si"}
+PORE, GRAPHITE, SI, CBD, GAP = 0, 1, 2, 3, 4
+CLASS_NAMES = {PORE: "pore", GRAPHITE: "graphite", SI: "si", CBD: "cbd", GAP: "gap"}
 
 N_HIST_RANGE = (-0.5, 4.0)
 N_HIST_BIN = 0.01
@@ -45,12 +45,13 @@ def compute_thresholds(n: np.ndarray, norm: Normalisation, cfg: SegmentConfig) -
     candidates = [p for p in peaks if centers[p] > min_si]
     pore = 1 - cfg.pore_k * s
     if not candidates:
-        return Thresholds(pore, 1 + cfg.si_k_low * s, 1 + cfg.si_k_high * s, None, "sigma")
+        low = 1 + cfg.si_k_low * s + cfg.si_low_offset
+        return Thresholds(pore, low, max(1 + cfg.si_k_high * s, low), None, "sigma")
     si_peak = max(candidates, key=lambda p: hist[p])
     graphite_peak = int(np.argmin(np.abs(centers - 1.0)))
     valley = graphite_peak + int(np.argmin(hist[graphite_peak : si_peak + 1]))
-    low = max(float(centers[valley]), min_si)
-    high = low + cfg.si_seed_fraction * (float(centers[si_peak]) - low)
+    low = max(float(centers[valley]), min_si) + cfg.si_low_offset
+    high = low + cfg.si_seed_fraction * max(float(centers[si_peak]) - low, 0.0)
     return Thresholds(pore, low, high, float(centers[si_peak]), "valley")
 
 

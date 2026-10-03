@@ -13,15 +13,18 @@ from PIL import Image
 
 from .pipeline import SegmentationResult
 from .preprocess import smoothed_histogram
-from .segment import N_HIST_BIN, N_HIST_RANGE, PORE, SI
+from .segment import CBD, GAP, N_HIST_BIN, N_HIST_RANGE, PORE, SI
 
 SI_COLOUR = np.array([255, 140, 0], dtype=np.float32)
 PORE_COLOUR = np.array([30, 60, 255], dtype=np.float32)
+CBD_COLOUR = np.array([40, 200, 40], dtype=np.float32)
+GAP_COLOUR = np.array([255, 0, 255], dtype=np.float32)
+CLASS_COLOURS = ((SI, SI_COLOUR), (PORE, PORE_COLOUR), (CBD, CBD_COLOUR), (GAP, GAP_COLOUR))
 
 
 def overlay(raw: np.ndarray, labels: np.ndarray, alpha: float = 0.45) -> np.ndarray:
     rgb = np.repeat(raw[..., None], 3, axis=2).astype(np.float32)
-    for cls, colour in ((SI, SI_COLOUR), (PORE, PORE_COLOUR)):
+    for cls, colour in CLASS_COLOURS:
         m = labels == cls
         rgb[m] = (1 - alpha) * rgb[m] + alpha * colour
     return rgb.astype(np.uint8)
@@ -47,7 +50,13 @@ def save_qc(res: SegmentationResult, out_dir: Path, image_id: str, downsample: i
     y, x = densest_si_crop(res.si)
     crop = (slice(y, y + 800), slice(x, x + 1200))
     raw_rgb = np.repeat(res.raw[crop][..., None], 3, axis=2)
-    Image.fromarray(np.concatenate([raw_rgb, ov[crop]], axis=1)).save(out_dir / f"{image_id}_crop.png")
+    top = np.concatenate([raw_rgb, ov[crop]], axis=1)
+    if res.mm is not None:
+        etd = np.clip(res.mm.etd_n[crop] * 110, 0, 255).astype(np.uint8)
+        etd_rgb = np.repeat(etd[..., None], 3, axis=2)
+        before = overlay(res.raw[crop], res.bse_labels[crop])
+        top = np.concatenate([top, np.concatenate([etd_rgb, before], axis=1)], axis=0)
+    Image.fromarray(top).save(out_dir / f"{image_id}_crop.png")
 
     centers, hist = smoothed_histogram(res.n.ravel()[::5], *N_HIST_RANGE, N_HIST_BIN, 2.0)
     fig, ax = plt.subplots(figsize=(7, 3.5))

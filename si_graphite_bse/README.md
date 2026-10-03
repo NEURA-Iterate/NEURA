@@ -1,8 +1,10 @@
-# si_graphite_bse: silicon / graphite detection on BSE images
+# si_graphite_bse: Si / graphite anode QC from BSE, ETD and Inlens SEM images
 
-Labels every pixel of a backscattered-electron (BSE) SEM image as **pore**, **graphite** or **silicon**, then
-computes KPIs per image and per batch. In BSE, brightness follows atomic number, so Si (Z=14) appears bright,
-graphite (Z=6) mid-grey and pore dark.
+Labels every pixel of a backscattered-electron (BSE) SEM image as **pore**, **graphite** or **silicon**, refined
+with the ETD and Inlens images of the same field of view into **pore**, **graphite**, **Si**, **binder/carbon-black
+(CBD)** and **thin gap**. It then computes the 10 key QC KPIs per image and per batch, each with a
+pixel-ambiguity range and an algorithm-choice range ([`docs/KPI_SPEC.md`](docs/KPI_SPEC.md)). In BSE, brightness
+follows atomic number, so Si (Z=14) appears bright, graphite (Z=6) mid-grey and pore dark.
 
 ## Quick start
 
@@ -10,12 +12,14 @@ graphite (Z=6) mid-grey and pore dark.
 cd si_graphite_bse
 pip install -e ".[dev]"
 export HF_TOKEN=...              # read access to gabrielgramicelli/NEURA-iterate-hack (private)
-sgb download --dest data         # BSE images only (~0.6 GB)
-sgb run --data data --out outputs
+sgb download --dest data         # BSE + ETD/SE + Inlens images
+sgb run --data data --out outputs --mc-runs 20
 # outputs/report/report.md is the summary
 ```
 
-`sgb run --limit 2` processes only the first 2 images; `--config my.yaml` overrides any value in
+`sgb run --limit 2` processes only the first 2 images; `--bse-only` ignores ETD/Inlens; `--mc-runs 0` and
+`--no-pixel-uncertainty` skip the two uncertainty estimates (the Monte Carlo reruns the whole pipeline per
+setting and dominates run time); `--config my.yaml` overrides any value in
 [`configs/default.yaml`](configs/default.yaml) (unspecified values keep their defaults). Set
 `kpis.pixel_size_um` once the pixel size is known: all sizes switch from px to µm and counts to per-mm².
 
@@ -42,43 +46,78 @@ sgb run --data data --out outputs
    The KPI `si_fraction_of_solids_unfiltered` reports the value before cleanup.
 6. **Pore**: normalised intensity < 1 − 4σ. **Graphite**: everything else.
 
+### Multi-detector refinement (`multimodal.py`, used when `<id>_ETD.tif` / `_SE.tif` / `_Inlens.tif` exist)
+
+The three detectors share the same pixel grid (checked: zero shift on all 31 fields).
+
+7. **ETD normalisation** to graphite interiors (graphite ≥ 10 px from its edge = 1). ETD is surface/topography
+   sensitive, so open pores are near-black (~0.1 × graphite) and consistent between images.
+8. **Pore** = ETD below the histogram valley between pore and graphite; split by width into **wide pores**
+   (opening with r = `gap_max_width_px`/2) and **thin gaps** (narrower dark structures plus deep black top-hat
+   features on lightly smoothed ETD, which catch 1–2 px gaps).
+9. **Si veto**: BSE Si components containing > 15 % ETD-black pixels are porous mesh, not Si.
+10. **Binder / carbon-black (experimental)**: porous mesh is 4–6× rougher than graphite interiors in all
+    detectors. CBD = local texture (geometric mean over BSE/ETD/Inlens of local SD ÷ graphite-interior SD)
+    > 3, with BSE texture > 3 too (BSE does not see topographic relief of graphite surfaces). Rough rims along
+    large pores, long gaps and Si edges are ignored unless they adjoin a mesh core. Inlens absolute brightness
+    varies strongly between images, so only its texture is used.
+11. **QC flags**: polishing-streak severity, charging (saturated pixels), BSE vs multi-detector Si agreement.
+
+### Uncertainty (`uncertainty.py`, `montecarlo.py`)
+
+- **Pixel ambiguity** (noise, blurred edges): per-pixel P(Si) from Gaussian fits of the Si and graphite
+  brightness in BSE, P(pore) likewise in ETD; edge blur δ from the 10–90 % width of the brightness profile
+  across Si edges. Each KPI is recomputed on confident-only, inclusive, shrunk-by-δ and grown-by-δ label maps:
+  `<kpi>_pix_lo` / `_pix_hi`.
+- **Algorithm choices** (thresholds, cleanup): `--mc-runs N` reruns the pipeline with N Latin-hypercube draws
+  of 18 settings (`PARAM_RANGES`), the same draws for every image. `<kpi>_alg_p05` / `_alg_p95` and the setting
+  with the largest |Spearman ρ| (`<kpi>_alg_driver`). `kpis/batch_robustness.csv`: share of runs in which the
+  batch difference is significant; robust only if ≥ 95 %.
+
 ## Outputs (`--out`)
 
 | Path | Content |
 |---|---|
-| `masks/<batch>_<id>_labels.png` | label map, 0 = pore, 1 = graphite, 2 = Si (full resolution) |
-| `qc/<batch>_<id>_overlay_small.png` | whole image, Si orange, pore blue (4× downsampled) |
-| `qc/<batch>_<id>_crop.png` | raw vs overlay, full-resolution crop with the most Si |
+| `masks/<batch>_<id>_labels.png` | label map, 0 = pore, 1 = graphite, 2 = Si, 3 = CBD, 4 = gap (full resolution) |
+| `qc/<batch>_<id>_overlay_small.png` | whole image, Si orange, pore blue, CBD green, gap magenta (4× downsampled) |
+| `qc/<batch>_<id>_crop.png` | full-resolution crop with the most Si: BSE, overlay; second row ETD, BSE-only labels |
 | `qc/<batch>_<id>_hist.png` | normalised histogram with thresholds |
 | `kpis/per_image.csv` | all KPIs + QC values per image |
 | `kpis/si_particles.csv` | one row per Si particle (area, ECD, centroid, aspect ratio, orientation, border flag) |
 | `kpis/si_profiles.csv` | Si fraction of solids in 20 row bands per image |
 | `kpis/batch_summary.csv`, `kpis/batch_stats.csv` | per-batch mean/sd/count; Kruskal–Wallis and pairwise Mann–Whitney with Cliff's delta |
-| `report/report.md` | summary tables, plots, QC flags |
+| `kpis/key_kpis.csv` | the 10 key KPIs: batch medians, median interval widths, main algorithm driver |
+| `kpis/mc_runs.csv`, `kpis/batch_robustness.csv` | algorithm Monte Carlo: KPIs per run and setting; robustness of batch differences |
+| `report/report.md` | key KPI table, robustness, per-image intervals, plots, trust flags |
 
-## KPIs (`kpis.py`)
+## Key KPIs (`kpis.py`), ranked by QC importance
 
-| Group | KPI | Notes |
+| Rank | KPI | Columns |
 |---|---|---|
-| Amount | `frac_si`, `frac_graphite`, `frac_pore` | area fractions |
-| | **`si_fraction_of_solids`** | Si / (Si + graphite), independent of porosity |
-| | `si_wt_pct_estimate` | area ratio × density ratio (2.33 / 2.26); valid only for pure Si |
-| Size | **`si_ecd_d10/d50/d90`**, `si_ecd_d50_area_weighted` | equivalent circular diameter, number-based |
-| | `si_count_per_mpx` (or `_per_mm2`) | |
-| | `graphite_ecd_d50`, `graphite_aspect_ratio_median`, `graphite_orientation_order`, `graphite_orientation_mean_deg` | flakes split by distance-transform watershed; order +1 = all horizontal, 0 = random |
-| Distribution | **`si_cv_w256/512/1024`** | coefficient of variation of Si fraction of solids over windows |
-| | `si_nn_distance_median`, `si_particles_per_cluster_mean`, `si_fraction_particles_clustered` | clusters = Si particles less than 5 px apart |
-| | `si_contact_graphite`, `si_contact_pore` | what surrounds Si, sampled 2–5 px outside each particle |
-| | `si_profile_rel_slope` | Si-fraction slope from top to bottom row, relative to the mean |
-| Composition | **`si_grey_median_n`**, `si_grey_iqr_n` | Si grey level relative to the graphite peak; a shift suggests a different Si material |
-| QC | `qc_*` | normalisation, thresholds, method, Si peak position, `qc_bright_unassigned_fraction` (bright area not in particles: haze / nano-Si / rims) |
+| 1 | Si fraction of solids (→ Si wt %) | `si_fraction_of_solids`, `si_wt_pct_estimate` |
+| 2 | Porosity + top-to-bottom gradient | `frac_pore` (pore + gap), `porosity_profile_rel_slope` |
+| 3 | Si coarse tail D90 (with D50) | `si_ecd_d90`, `si_ecd_d50` (number-weighted ECD; also `si_ecd_d50_area_weighted`) |
+| 4 | Si agglomeration | `si_dispersion_index_w512` (window CV ÷ CV of the same particles placed at random; 1 = random, `si_dispersion_random_sd_*` = spread under random placement), `si_clustering_index` (random ÷ observed mean nearest-neighbour distance) |
+| 5 | Cracks + Si debonding | `si_crack_density`, `graphite_crack_density` (ETD dark-ridge skeleton length per 10⁴ px² of phase, polishing streaks suppressed), `si_debond_fraction` (gap share of the 0–3 px shell around Si) |
+| 6 | Binder/carbon-black + gradient | `cbd_fraction_of_solids`, `cbd_profile_rel_slope` (experimental) |
+| 7 | Si material fingerprint | `si_grey_median_n` (Si cores, normalised to graphite) |
+| 8 | Si top-to-bottom gradient | `si_profile_rel_slope` |
+| 9 | Graphite alignment | `graphite_alignment` (structure tensor of graphite boundaries: +1 horizontal, 0 random, −1 vertical), `graphite_alignment_coherence`, `graphite_alignment_angle_deg` |
+| 10 | Si contact | `si_contact_graphite/cbd/pore/gap` (classes 2–5 px outside each particle; diagnostic) |
 
-**Bold** = priority KPIs for detecting a supplier change.
+Supporting values: `frac_*`, `si_ecd_d10`, `si_count_per_mpx`, `si_cv_w*`, `si_fraction_particles_clustered`,
+graphite size/shape, and `qc_*` fields (thresholds, edge blur, detector agreement, streaks, charging).
 
 ## Limitations
 
-- Binder and carbon black are indistinguishable from graphite or pore in BSE and are not measured.
-- Porosity is the least reliable class: pores often show sub-surface material at graphite-like grey.
+- Binder/carbon-black is texture-based and not validated against ground truth: rough graphite surfaces can still
+  be counted and smooth binder missed. Without ETD/Inlens it is not measured.
+- Pores recessed below the surface but not black in ETD are undercounted. Without ETD, pores come from BSE
+  (least reliable: pores often show sub-surface material at graphite-like grey).
+- Si grey level is a relative change flag, comparable only at identical acquisition settings; not a chemical
+  identification (SiOx needs calibration or EDS).
+- The uncertainty ranges cover pixel ambiguity and algorithm choices only, not field-of-view sampling or bias
+  against ground truth.
 - No pixel-size metadata exists in the TIFFs, so sizes are in px until `pixel_size_um` is set.
 - **Low-contrast images:** images whose Si peak sits close to graphite (normalised < 1.8, currently
   `Batch_1/img_4ih2ggld` and `img_5n1q8atc`) are flagged in the report. In those images some bright binder
@@ -88,7 +127,7 @@ sgb run --data data --out outputs
 ## Development
 
 ```bash
-pytest           # synthetic-image tests (known phase fractions, contrast/offset invariance, edge rims)
+pytest           # synthetic-image tests (phase fractions, invariance, edge rims, ETD pores/gaps, mesh, KPI indices, uncertainty)
 ruff check . && ruff format --check .
 python scripts/explore_histograms.py <data> hist.png   # normalised histograms of all images
 ```

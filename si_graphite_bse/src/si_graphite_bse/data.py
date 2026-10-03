@@ -1,4 +1,4 @@
-"""Dataset download and BSE image loading."""
+"""Dataset download and image loading (BSE plus co-registered ETD / Inlens siblings)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import tifffile
 
 HF_REPO_ID = "gabrielgramicelli/NEURA-iterate-hack"
 BSE_SUFFIX = "_BSE.tif"
+DETECTOR_SUFFIXES = {"etd": ("_ETD.tif", "_SE.tif"), "inlens": ("_Inlens.tif",)}
 
 
 @dataclass(frozen=True)
@@ -18,9 +19,17 @@ class BSEImage:
     batch: str
     path: Path
 
+    def sibling(self, detector: str) -> Path | None:
+        """Path of the same field of view from another detector (ETD falls back to SE), or None."""
+        stem = str(self.path)[: -len(BSE_SUFFIX)]
+        for suffix in DETECTOR_SUFFIXES[detector]:
+            if Path(stem + suffix).exists():
+                return Path(stem + suffix)
+        return None
+
 
 def download_dataset(dest: Path, token: str | None = None) -> Path:
-    """Download only the BSE images from the private HF dataset (needs HF_TOKEN or a cached login)."""
+    """Download BSE, ETD/SE and Inlens images from the private HF dataset (needs HF_TOKEN or a cached login)."""
     from huggingface_hub import snapshot_download
 
     return Path(
@@ -28,7 +37,7 @@ def download_dataset(dest: Path, token: str | None = None) -> Path:
             repo_id=HF_REPO_ID,
             repo_type="dataset",
             local_dir=str(dest),
-            allow_patterns=[f"*{BSE_SUFFIX}"],
+            allow_patterns=[f"*{BSE_SUFFIX}"] + [f"*{s}" for v in DETECTOR_SUFFIXES.values() for s in v],
             token=token,
         )
     )
@@ -43,7 +52,7 @@ def find_bse_images(root: Path) -> list[BSEImage]:
 
 
 def load_bse(path: Path, border_px: int = 2) -> np.ndarray:
-    """Load a BSE TIFF as a 2D uint8 array.
+    """Load an SEM TIFF (any detector) as a 2D uint8 array.
 
     Files are grey images stored as 3 identical channels; some have corrupted
     outer columns, so a small border is cropped on every side.
