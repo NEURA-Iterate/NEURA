@@ -22,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.4"]
+dino = ["torch>=2.2", "transformers>=4.56"]
 
 [project.scripts]
 anode-qc = "anode_qc.cli:main"
