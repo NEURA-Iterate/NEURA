@@ -3,8 +3,8 @@
     python scripts/dino_extract_features.py --data <Hackathon-Polaron> --out dino_cache [--model facebook/dinov2-small]
 
 Without ``--model`` DINOv3 ViT-S/16 is tried first (gated on the Hub: accept the licence and set HF_TOKEN), then
-DINOv2-small. One ``<batch>_<image_id>.npz`` per field holds ``bse``, ``etd`` and ``inlens`` arrays of shape
-(H // patch, W // patch, hidden) in float16 (~190 MB per field for the small models).
+DINOv2-small. One ``<image_id>.npz`` per field (no batch label in the name) holds ``bse``, ``etd`` and ``inlens``
+arrays of shape (H // patch, W // patch, hidden) in float16 (~190 MB per field for the small models).
 """
 
 import argparse
@@ -35,7 +35,7 @@ def main() -> None:
     print("backbone", mid, "patch", model.config.patch_size, flush=True)
     cfg = Config()
     for im in find_bse_images(a.data):
-        f = out / f"{im.batch}_{im.image_id}.npz"
+        f = out / f"{im.image_id}.npz"
         if f.exists():
             continue
         t = time.time()
