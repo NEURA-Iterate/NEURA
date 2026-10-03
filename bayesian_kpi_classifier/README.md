@@ -87,3 +87,5 @@ print(prediction.summary())
 Run `python examples/synthetic_demo.py` for a reproducible demonstration, including
 uncertain measurements, an outlier, leave-one-out metrics, KPI separation, and ranked
 KPI subsets.
+
+See the [17-round rotating held-out batch CV experiment](experiments/batch_cv/README.md).
