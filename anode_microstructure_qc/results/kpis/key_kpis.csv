@@ -1,0 +1,21 @@
+rank,kpi,column,Batch_1,Batch_2,Batch_3,pixel width (median)
+1,Si fraction of solids,si_fraction_of_solids,0.0658,0.0572,0.0593,0.021
+1,Si fraction of solids,si_wt_pct_estimate,6.77,5.89,6.11,2.2
+2,Porosity + gradient,frac_pore,0.115,0.124,0.143,0.077
+2,Porosity + gradient,porosity_profile_rel_slope,-0.0571,-0.108,0.127,0.074
+3,Si coarse tail D90 (D50),si_ecd_d90,158,161,145,16
+3,Si coarse tail D90 (D50),si_ecd_d50,38.6,39.8,42.9,13
+4,Si agglomeration,si_dispersion_index_w512,1.1,1.07,1.06,0.023
+4,Si agglomeration,si_clustering_index,1.16,1.21,1.17,0.084
+5,Cracks + Si debonding,si_crack_density,18.7,17.4,22.2,32
+5,Cracks + Si debonding,graphite_crack_density,47.7,51.4,67.2,4.1
+5,Cracks + Si debonding,si_debond_fraction,0.000259,0.000211,0.00016,0.0069
+6,Binder/carbon-black + gradient,cbd_fraction_of_solids,0.0996,0.0993,0.0995,0.01
+6,Binder/carbon-black + gradient,cbd_profile_rel_slope,-0.236,-0.0472,-0.064,0.027
+7,Si material fingerprint,si_grey_median_n,1.97,2.19,2.19,0.02
+8,Si top-to-bottom gradient,si_profile_rel_slope,0.255,-0.16,0.11,0.059
+9,Graphite alignment,graphite_alignment,0.147,0.141,0.147,0.013
+10,Si contact,si_contact_graphite,0.751,0.766,0.788,0.28
+10,Si contact,si_contact_cbd,0.226,0.219,0.196,0.14
+10,Si contact,si_contact_pore,0.00392,0.00392,0.00919,0.15
+10,Si contact,si_contact_gap,0.00649,0.00395,0.00425,0.01
