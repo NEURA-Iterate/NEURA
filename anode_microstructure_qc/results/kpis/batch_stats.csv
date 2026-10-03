@@ -1,0 +1,121 @@
+kpi,comparison,statistic,p_value,cliffs_delta
+si_fraction_of_solids,all (Kruskal-Wallis),1.1758241758241894,0.5554858804750897,
+si_fraction_of_solids,Batch_1 vs Batch_2 (Mann-Whitney),24.0,0.3434343434343435,0.37142857142857144
+si_fraction_of_solids,Batch_1 vs Batch_3 (Mann-Whitney),36.0,0.9643962848297213,0.02857142857142857
+si_fraction_of_solids,Batch_2 vs Batch_3 (Mann-Whitney),37.0,0.4002579979360166,-0.24489795918367346
+si_wt_pct_estimate,all (Kruskal-Wallis),1.1758241758241894,0.5554858804750897,
+si_wt_pct_estimate,Batch_1 vs Batch_2 (Mann-Whitney),24.0,0.3434343434343435,0.37142857142857144
+si_wt_pct_estimate,Batch_1 vs Batch_3 (Mann-Whitney),36.0,0.9643962848297213,0.02857142857142857
+si_wt_pct_estimate,Batch_2 vs Batch_3 (Mann-Whitney),37.0,0.4002579979360166,-0.24489795918367346
+frac_pore,all (Kruskal-Wallis),13.687667887667885,0.001066008538059434,
+frac_pore,Batch_1 vs Batch_2 (Mann-Whitney),7.0,0.10606060606060606,-0.6
+frac_pore,Batch_1 vs Batch_3 (Mann-Whitney),0.0,0.0001719986240110079,-1.0
+frac_pore,Batch_2 vs Batch_3 (Mann-Whitney),17.0,0.01585827313381493,-0.6530612244897959
+porosity_profile_rel_slope,all (Kruskal-Wallis),4.570207570207586,0.10176350002278756,
+porosity_profile_rel_slope,Batch_1 vs Batch_2 (Mann-Whitney),19.0,0.8762626262626263,0.08571428571428572
+porosity_profile_rel_slope,Batch_1 vs Batch_3 (Mann-Whitney),21.0,0.2192982456140351,-0.4
+porosity_profile_rel_slope,Batch_2 vs Batch_3 (Mann-Whitney),22.0,0.04609563123495012,-0.5510204081632653
+si_ecd_d90,all (Kruskal-Wallis),4.914774114774119,0.0856584794977716,
+si_ecd_d90,Batch_1 vs Batch_2 (Mann-Whitney),21.0,0.638888888888889,0.2
+si_ecd_d90,Batch_1 vs Batch_3 (Mann-Whitney),61.0,0.014275885792913657,0.7428571428571429
+si_ecd_d90,Batch_2 vs Batch_3 (Mann-Whitney),61.0,0.4002579979360166,0.24489795918367346
+si_ecd_d50,all (Kruskal-Wallis),1.085714285714289,0.5810856336678192,
+si_ecd_d50,Batch_1 vs Batch_2 (Mann-Whitney),23.0,0.4318181818181819,0.3142857142857143
+si_ecd_d50,Batch_1 vs Batch_3 (Mann-Whitney),40.0,0.6867905056759546,0.14285714285714285
+si_ecd_d50,Batch_2 vs Batch_3 (Mann-Whitney),38.0,0.44296525627794986,-0.22448979591836735
+si_dispersion_index_w512,all (Kruskal-Wallis),0.9365079365079367,0.6260944953385381,
+si_dispersion_index_w512,Batch_1 vs Batch_2 (Mann-Whitney),21.0,0.638888888888889,0.2
+si_dispersion_index_w512,Batch_1 vs Batch_3 (Mann-Whitney),44.0,0.4439284485724114,0.2571428571428571
+si_dispersion_index_w512,Batch_2 vs Batch_3 (Mann-Whitney),57.0,0.5845717234262127,0.16326530612244897
+si_clustering_index,all (Kruskal-Wallis),0.8043956043956086,0.6688484329148707,
+si_clustering_index,Batch_1 vs Batch_2 (Mann-Whitney),13.0,0.5303030303030304,-0.2571428571428571
+si_clustering_index,Batch_1 vs Batch_3 (Mann-Whitney),26.0,0.4439284485724114,-0.2571428571428571
+si_clustering_index,Batch_2 vs Batch_3 (Mann-Whitney),52.0,0.8557447540419678,0.061224489795918366
+si_crack_density,all (Kruskal-Wallis),6.350671550671549,0.041780073011363446,
+si_crack_density,Batch_1 vs Batch_2 (Mann-Whitney),13.0,0.5303030303030304,-0.2571428571428571
+si_crack_density,Batch_1 vs Batch_3 (Mann-Whitney),9.0,0.014275885792913657,-0.7428571428571429
+si_crack_density,Batch_2 vs Batch_3 (Mann-Whitney),29.0,0.14895080839353286,-0.40816326530612246
+graphite_crack_density,all (Kruskal-Wallis),12.957020757020771,0.0015360971792602988,
+graphite_crack_density,Batch_1 vs Batch_2 (Mann-Whitney),6.0,0.07323232323232323,-0.6571428571428571
+graphite_crack_density,Batch_1 vs Batch_3 (Mann-Whitney),5.0,0.00326797385620915,-0.8571428571428571
+graphite_crack_density,Batch_2 vs Batch_3 (Mann-Whitney),12.0,0.004231166150670795,-0.7551020408163265
+si_debond_fraction,all (Kruskal-Wallis),0.36924732234558216,0.8314171195260119,
+si_debond_fraction,Batch_1 vs Batch_2 (Mann-Whitney),20.0,0.7550505050505051,0.14285714285714285
+si_debond_fraction,Batch_1 vs Batch_3 (Mann-Whitney),35.0,1.0,0.0
+si_debond_fraction,Batch_2 vs Batch_3 (Mann-Whitney),41.0,0.5752997807820364,-0.16326530612244897
+cbd_fraction_of_solids,all (Kruskal-Wallis),0.7106227106227152,0.7009551631159431,
+cbd_fraction_of_solids,Batch_1 vs Batch_2 (Mann-Whitney),20.0,0.7550505050505051,0.14285714285714285
+cbd_fraction_of_solids,Batch_1 vs Batch_3 (Mann-Whitney),35.0,1.0,0.0
+cbd_fraction_of_solids,Batch_2 vs Batch_3 (Mann-Whitney),37.0,0.4002579979360166,-0.24489795918367346
+cbd_profile_rel_slope,all (Kruskal-Wallis),1.0234432234432376,0.5994626479930347,
+cbd_profile_rel_slope,Batch_1 vs Batch_2 (Mann-Whitney),13.0,0.5303030303030304,-0.2571428571428571
+cbd_profile_rel_slope,Batch_1 vs Batch_3 (Mann-Whitney),24.0,0.3426212590299278,-0.3142857142857143
+cbd_profile_rel_slope,Batch_2 vs Batch_3 (Mann-Whitney),51.0,0.91312349501204,0.04081632653061224
+si_grey_median_n,all (Kruskal-Wallis),0.5663003663003678,0.7534066303816365,
+si_grey_median_n,Batch_1 vs Batch_2 (Mann-Whitney),14.0,0.638888888888889,-0.2
+si_grey_median_n,Batch_1 vs Batch_3 (Mann-Whitney),27.0,0.499828001375989,-0.22857142857142856
+si_grey_median_n,Batch_2 vs Batch_3 (Mann-Whitney),48.0,0.9710182318541453,-0.02040816326530612
+si_profile_rel_slope,all (Kruskal-Wallis),1.9765567765567909,0.3722169527917262,
+si_profile_rel_slope,Batch_1 vs Batch_2 (Mann-Whitney),25.0,0.26767676767676774,0.42857142857142855
+si_profile_rel_slope,Batch_1 vs Batch_3 (Mann-Whitney),44.0,0.4439284485724114,0.2571428571428571
+si_profile_rel_slope,Batch_2 vs Batch_3 (Mann-Whitney),36.0,0.360061919504644,-0.2653061224489796
+graphite_alignment,all (Kruskal-Wallis),1.7010989010989022,0.42718015308511825,
+graphite_alignment,Batch_1 vs Batch_2 (Mann-Whitney),24.0,0.3434343434343435,0.37142857142857144
+graphite_alignment,Batch_1 vs Batch_3 (Mann-Whitney),48.0,0.2566219470244238,0.37142857142857144
+graphite_alignment,Batch_2 vs Batch_3 (Mann-Whitney),54.0,0.743326453388373,0.10204081632653061
+si_contact_graphite,all (Kruskal-Wallis),3.5687423687423774,0.16790260759580802,
+si_contact_graphite,Batch_1 vs Batch_2 (Mann-Whitney),11.0,0.3434343434343435,-0.37142857142857144
+si_contact_graphite,Batch_1 vs Batch_3 (Mann-Whitney),18.0,0.129858961128311,-0.4857142857142857
+si_contact_graphite,Batch_2 vs Batch_3 (Mann-Whitney),32.0,0.22447540419676645,-0.3469387755102041
+si_contact_cbd,all (Kruskal-Wallis),4.76947496947497,0.09211315751532995,
+si_contact_cbd,Batch_1 vs Batch_2 (Mann-Whitney),23.0,0.4318181818181819,0.3142857142857143
+si_contact_cbd,Batch_1 vs Batch_3 (Mann-Whitney),54.0,0.08703130374957001,0.5428571428571428
+si_contact_cbd,Batch_2 vs Batch_3 (Mann-Whitney),71.0,0.11007911936704508,0.4489795918367347
+si_contact_pore,all (Kruskal-Wallis),6.034432234432245,0.04893726451405029,
+si_contact_pore,Batch_1 vs Batch_2 (Mann-Whitney),12.0,0.4318181818181819,-0.3142857142857143
+si_contact_pore,Batch_1 vs Batch_3 (Mann-Whitney),11.0,0.025799793601651185,-0.6857142857142857
+si_contact_pore,Batch_2 vs Batch_3 (Mann-Whitney),28.0,0.12846577227382183,-0.42857142857142855
+si_contact_gap,all (Kruskal-Wallis),1.5663003663003678,0.4569642205572463,
+si_contact_gap,Batch_1 vs Batch_2 (Mann-Whitney),23.0,0.4318181818181819,0.3142857142857143
+si_contact_gap,Batch_1 vs Batch_3 (Mann-Whitney),33.0,0.893188854489164,-0.05714285714285714
+si_contact_gap,Batch_2 vs Batch_3 (Mann-Whitney),33.0,0.25452356381148955,-0.32653061224489793
+frac_si,all (Kruskal-Wallis),1.0527472527472668,0.5907433461493558,
+frac_si,Batch_1 vs Batch_2 (Mann-Whitney),24.0,0.3434343434343435,0.37142857142857144
+frac_si,Batch_1 vs Batch_3 (Mann-Whitney),43.0,0.499828001375989,0.22857142857142856
+frac_si,Batch_2 vs Batch_3 (Mann-Whitney),44.0,0.743326453388373,-0.10204081632653061
+frac_graphite,all (Kruskal-Wallis),12.109890109890102,0.002346231030923471,
+frac_graphite,Batch_1 vs Batch_2 (Mann-Whitney),22.0,0.5303030303030304,0.2571428571428571
+frac_graphite,Batch_1 vs Batch_3 (Mann-Whitney),68.0,0.0006879944960440316,0.9428571428571428
+frac_graphite,Batch_2 vs Batch_3 (Mann-Whitney),82.0,0.012469900240798073,0.673469387755102
+frac_cbd,all (Kruskal-Wallis),0.939194139194143,0.6252541514407745,
+frac_cbd,Batch_1 vs Batch_2 (Mann-Whitney),23.0,0.4318181818181819,0.3142857142857143
+frac_cbd,Batch_1 vs Batch_3 (Mann-Whitney),39.0,0.7538699690402476,0.11428571428571428
+frac_cbd,Batch_2 vs Batch_3 (Mann-Whitney),39.0,0.48796009631922954,-0.20408163265306123
+si_ecd_d10,all (Kruskal-Wallis),2.2757020757020854,0.3205070397862168,
+si_ecd_d10,Batch_1 vs Batch_2 (Mann-Whitney),27.0,0.148989898989899,0.5428571428571428
+si_ecd_d10,Batch_1 vs Batch_3 (Mann-Whitney),47.0,0.2975576195390437,0.34285714285714286
+si_ecd_d10,Batch_2 vs Batch_3 (Mann-Whitney),42.0,0.6358789129686964,-0.14285714285714285
+si_count_per_mpx,all (Kruskal-Wallis),2.1765683017393,0.33679388570218594,
+si_count_per_mpx,Batch_1 vs Batch_2 (Mann-Whitney),18.0,1.0,0.02857142857142857
+si_count_per_mpx,Batch_1 vs Batch_3 (Mann-Whitney),27.0,0.48726224479412283,-0.22857142857142856
+si_count_per_mpx,Batch_2 vs Batch_3 (Mann-Whitney),29.0,0.14559607705400285,-0.40816326530612246
+si_clustering_index,all (Kruskal-Wallis),0.8043956043956086,0.6688484329148707,
+si_clustering_index,Batch_1 vs Batch_2 (Mann-Whitney),13.0,0.5303030303030304,-0.2571428571428571
+si_clustering_index,Batch_1 vs Batch_3 (Mann-Whitney),26.0,0.4439284485724114,-0.2571428571428571
+si_clustering_index,Batch_2 vs Batch_3 (Mann-Whitney),52.0,0.8557447540419678,0.061224489795918366
+si_dispersion_index_w256,all (Kruskal-Wallis),3.53479853479854,0.170776555932128,
+si_dispersion_index_w256,Batch_1 vs Batch_2 (Mann-Whitney),14.0,0.638888888888889,-0.2
+si_dispersion_index_w256,Batch_1 vs Batch_3 (Mann-Whitney),46.0,0.3426212590299278,0.3142857142857143
+si_dispersion_index_w256,Batch_2 vs Batch_3 (Mann-Whitney),73.0,0.07932576539387685,0.4897959183673469
+si_dispersion_index_w1024,all (Kruskal-Wallis),4.232967032967039,0.12045446076017358,
+si_dispersion_index_w1024,Batch_1 vs Batch_2 (Mann-Whitney),9.0,0.20202020202020204,-0.4857142857142857
+si_dispersion_index_w1024,Batch_1 vs Batch_3 (Mann-Whitney),32.0,0.8230134158926727,-0.08571428571428572
+si_dispersion_index_w1024,Batch_2 vs Batch_3 (Mann-Whitney),76.0,0.04609563123495012,0.5510204081632653
+si_cv_w512,all (Kruskal-Wallis),2.0490842490842596,0.35896078711840046,
+si_cv_w512,Batch_1 vs Batch_2 (Mann-Whitney),8.0,0.148989898989899,-0.5428571428571428
+si_cv_w512,Batch_1 vs Batch_3 (Mann-Whitney),35.0,1.0,0.0
+si_cv_w512,Batch_2 vs Batch_3 (Mann-Whitney),64.0,0.28716890264877887,0.30612244897959184
+graphite_alignment_coherence,all (Kruskal-Wallis),1.88302808302808,0.3900368560957106,
+graphite_alignment_coherence,Batch_1 vs Batch_2 (Mann-Whitney),24.0,0.3434343434343435,0.37142857142857144
+graphite_alignment_coherence,Batch_1 vs Batch_3 (Mann-Whitney),49.0,0.2192982456140351,0.4
+graphite_alignment_coherence,Batch_2 vs Batch_3 (Mann-Whitney),54.0,0.743326453388373,0.10204081632653061
