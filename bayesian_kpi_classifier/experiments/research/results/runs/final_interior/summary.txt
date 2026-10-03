@@ -1,0 +1,25 @@
+correct: 43
+n: 51
+accuracy: 0.8431372549019608
+balanced_accuracy: 0.8431372549019608
+log_loss: 0.5219888174372216
+balanced_log_loss: 0.5219888174372217
+acc_Batch_1: 0.7058823529411765
+acc_Batch_2: 0.9411764705882353
+acc_Batch_3: 0.8823529411764706
+image_correct: 27
+image_balanced_accuracy: 0.865546218487395
+
+Tier reliability:
+         n  accuracy
+tier                
+high    16  1.000000
+medium  13  1.000000
+review  22  0.636364
+
+Confusion (rows true):
+pred     Batch_1  Batch_2  Batch_3
+true                              
+Batch_1       12        2        3
+Batch_2        0       16        1
+Batch_3        1        1       15
