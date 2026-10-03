@@ -1,11 +1,33 @@
 # neura-uq
 
-`neura-uq` assigns an SEM sample to one of several reference batches using a Bayesian
-Student-t classifier. KPI values can be transformed (for example, fractions with a
-logit and sizes with a log), and uncertainty from measurement SDs or perturbed
-segmentation runs is included in prediction. Batch profiles are regularized toward
-shared pooled covariance, which is useful when each batch has only a few reference
-samples.
+`neura-uq` is a supervised Bayesian generative classifier for assigning SEM samples
+to reference batches from transformed KPIs. It uses a Student-t predictive
+distribution and integrates measurement uncertainty from supplied SDs or perturbed
+segmentation runs. KPI transforms include `log` and `logit`.
+
+`BayesianStudentTClassifier` supports diagonal covariance (Bayesian naive Bayes) and
+full covariance for correlated KPIs. The small-sample rotating-CV workflow uses
+diagonal covariance; the library and CLI currently default to full covariance.
+
+## Predictions
+
+`Prediction.probabilities` contains normalized posterior probabilities for each
+batch—soft, responsibility-like scores, not an EM clustering result.
+`typicality_pvalue` reports fit to each batch; `outlier` flags samples atypical for
+all batches, and `ambiguous` flags predictions without a decisive top probability.
+`kpi_evidence` gives per-KPI log-evidence for the predicted batch versus the
+runner-up. With diagonal covariance and diagonal measurement noise, those
+contributions add exactly.
+
+`confidence_tier` returns:
+
+- `review` if the predicted batch's probability is below 0.6 or its typicality
+  p-value is below 0.05;
+- `high` if the probability is at least 0.9;
+- `medium` otherwise.
+
+See the [17-round rotating held-out CV experiment](experiments/batch_cv/README.md)
+for protocol, results, and limitations.
 
 ## CSV formats
 
@@ -87,5 +109,3 @@ print(prediction.summary())
 Run `python examples/synthetic_demo.py` for a reproducible demonstration, including
 uncertain measurements, an outlier, leave-one-out metrics, KPI separation, and ranked
 KPI subsets.
-
-See the [17-round rotating held-out batch CV experiment](experiments/batch_cv/README.md).
