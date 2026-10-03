@@ -33,11 +33,11 @@ BATCH_COL = "batch_id"
 MAD_TO_SD = 1.4826
 EPS = 1e-9
 
-_VIEW_RE = re.compile(r"^kpi__([^_]+(?:_[^_]+)*?)__")
+_VIEW_RE = re.compile(r"^(?:kpi|qa|emb)__([^_]+(?:_[^_]+)*?)__")
 
 
 def view_of(column: str) -> str:
-    """Return the view encoded in ``kpi__<view>__<name>__<unit>`` or ``default``."""
+    """Return the view encoded in ``kpi__<view>__...`` / ``qa__<view>__...`` / ``emb__<view>__...`` or ``default``."""
     m = _VIEW_RE.match(column)
     return m.group(1) if m else "default"
 
@@ -139,7 +139,50 @@ class GaussianScorer(ProfileDistanceScorer):
         return pd.Series(per[runner_up] - per[winner], index=self.columns).sort_values(ascending=False)
 
 
-SCORERS = {ProfileDistanceScorer.name: ProfileDistanceScorer, GaussianScorer.name: GaussianScorer}
+class CosineCentroidScorer(ProfileDistanceScorer):
+    """Cosine distance to each batch's mean embedding (no per-feature scaling).
+
+    Features are centred on the training mean and L2-normalised per view block
+    so each view contributes equally; intended for encoder embeddings.
+    """
+
+    name = "cosine"
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "CosineCentroidScorer":
+        self.columns = list(X.columns)
+        values = X.to_numpy(dtype=float)
+        self.center = np.nanmean(values, axis=0)
+        self.scale = np.ones(len(self.columns))
+        self.weights = column_weights(self.columns, self.view_weights)
+        self.views = np.array([view_of(c) for c in self.columns])
+        self.batches = sorted(y.astype(str).unique())
+        normed = np.stack([self._unit(r) for r in values])
+        self.profiles = {b: normed[(y.astype(str) == b).to_numpy()].mean(axis=0) for b in self.batches}
+        return self
+
+    def _unit(self, row: np.ndarray) -> np.ndarray:
+        z = np.nan_to_num(row - self.center)
+        out = np.zeros_like(z)
+        for v in np.unique(self.views):
+            m = self.views == v
+            out[m] = z[m] / max(np.linalg.norm(z[m]), 1e-12)
+        return out
+
+    def _scaled(self, x: pd.Series) -> np.ndarray:
+        return self._unit(x[self.columns].to_numpy(dtype=float))
+
+    def scores(self, x: pd.Series) -> dict[str, float]:
+        z = self._scaled(x)
+        return {b: float(1.0 - np.sum(self.weights * z * p) / max(np.linalg.norm(p), 1e-12)) for b, p in self.profiles.items()}
+
+    def contributions(self, x: pd.Series, winner: str, runner_up: str) -> pd.Series:
+        z = self._scaled(x)
+        pw, pr = self.profiles[winner], self.profiles[runner_up]
+        diff = self.weights * (z * pw / max(np.linalg.norm(pw), 1e-12) - z * pr / max(np.linalg.norm(pr), 1e-12))
+        return pd.Series(diff, index=self.columns).sort_values(ascending=False)
+
+
+SCORERS = {c.name: c for c in (ProfileDistanceScorer, GaussianScorer, CosineCentroidScorer)}
 
 
 @dataclass
@@ -276,6 +319,7 @@ def run(args: argparse.Namespace) -> dict:
     view_weights = parse_view_weights(args.view_weights)
     scorer_cls = SCORERS[args.method]
     factory = lambda: scorer_cls(view_weights=view_weights)  # noqa: E731
+
     kw = dict(min_train_per_batch=args.min_train_per_batch, review_margin=args.review_margin, top_k=args.top_k)
 
     result = leave_one_sample_out(df, feature_cols, factory, **kw)

@@ -93,3 +93,19 @@ px because the TIFFs carry no pixel size.
 
 See `reports/kpi_hypothesis_test.md` for the result of running this on the
 labelled batches.
+
+## Frozen-encoder embeddings (second opinion)
+
+`encoder.py` turns each view image into a mean-pooled tile embedding from a
+frozen pretrained backbone (DINOv2 ViT-S/14 or ImageNet ResNet-50) and writes
+`emb__<view>__<model>__<i>` columns in the same one-row-per-sample CSV, so the
+evaluation harness runs unchanged (`--feature-prefix emb__`, `--method cosine`).
+`embedding_probe.py` asks what the embedding encodes: a leave-one-sample-out
+ridge regression from the embedding to each `kpi__` / `qa__` measure.
+Result on the three labelled batches: `reports/encoder_embedding_test.md`.
+
+```bash
+python encoder.py --manifest sample_manifest.csv --model dinov2_vits14 --out features_emb_dinov2.csv
+python evaluation.py --features features_emb_dinov2.csv --feature-prefix emb__ --method cosine --out eval_emb
+python embedding_probe.py --embeddings features_emb_dinov2.csv --targets features_real.csv
+```
