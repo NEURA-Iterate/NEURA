@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neura-uq"
+version = "0.1.0"
+description = "Bayesian Student-t classifier for KPI batch assignment"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+neura-classify = "neura_uq.cli:main"
+
+[tool.setuptools]
+packages = ["neura_uq"]
