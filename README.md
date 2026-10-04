@@ -1,5 +1,9 @@
 # NEURA: SEM anode sample → batch classifier
 
+**Demo video:** https://www.youtube.com/watch?v=MZ5414D2tL8
+
+[![NEURA demo](https://img.youtube.com/vi/MZ5414D2tL8/hqdefault.jpg)](https://www.youtube.com/watch?v=MZ5414D2tL8)
+
 Given one **sample** (one field of view imaged by three detectors, **BSE**, **ETD/SE** and **Inlens**), NEURA returns
 P(Batch 1), P(Batch 2), P(Batch 3) with uncertainty ranges, a QC decision against **Batch 3 (the baseline)**, and the
 physical reasons behind the call. Each sample is Si/graphite anode material; the three images of a sample are always used
@@ -200,3 +204,11 @@ python -m pytest -q tests
 - **Units:** sizes are in px until a pixel size is known.
 - **Probabilities are relative:** they're relative to the three known batches. Check the typicality and outlier flags for
   samples that fit none of them.
+
+## Notice: built with Devin and Modal
+
+- **[Devin](https://devin.ai)** (Cognition AI), an AI software engineer, helped write much of this repository: the DINOv2
+  segmentation, the Bayesian classifiers and their validation, the FastAPI + Svelte app, and the documentation. The app
+  also runs in Devin sessions (`bash integration/run.sh`).
+- **[Modal](https://modal.com)** provided the cloud compute: the MicroNet ResNet-50 training and evaluation
+  (`modal_app.py`) and the DINOv2 feature-extraction and training app (`feature_classifier/phaseseg/modal_app.py`).
