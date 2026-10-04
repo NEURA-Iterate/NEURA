@@ -1,5 +1,7 @@
 # Microscopy sample batch assignment
 
+**Current best classifier and results: see [CLASSIFIER.md](CLASSIFIER.md).**
+
 Assign each of nine unseen **samples** to one of three known batches (1, 2, or 3). 
 A sample contains three microscopy views/channels. 
 The priority is a repeatable prediction with physical reasons for each assignment.
