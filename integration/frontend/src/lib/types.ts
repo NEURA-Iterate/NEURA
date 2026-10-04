@@ -15,6 +15,7 @@ export interface Figure { name: string; title: string; url: string }
 export interface Images {
   bse: string; rule_overlay: string; learned_overlay: string; cracks: string
   zoom_bse: string; zoom_rule: string; zoom_learned: string; zoom_cracks: string
+  kpi_pore?: string; kpi_cracks?: string; kpi_si?: string
 }
 export type Legend = Record<string, string | { label: string; color: string }> | { name: string; color: string }[]
 export interface Representative {

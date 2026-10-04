@@ -44,6 +44,11 @@
     { source: 'learned', x: 'frac_pore', y: 'graphite_aspect_ratio_median', title: 'Porosity vs graphite shape (DINO)' },
     { source: 'learned', x: 'si_cv_w256', y: 'graphite_aspect_ratio_median', title: 'Si heterogeneity vs graphite shape (DINO)' },
   ]
+  const KPI_VISUAL: Record<string, { key: keyof Images; caption: string }> = {
+    frac_pore: { key: 'kpi_pore', caption: 'Pores shown in blue across the whole image.' },
+    graphite_crack_density: { key: 'kpi_cracks', caption: 'Cracks inside graphite in red, in the most cracked region (full resolution).' },
+    si_cv_w256: { key: 'kpi_si', caption: 'Si share of each 256 px window: pale = little Si, deep orange = a lot. Patchier colours mean higher heterogeneity.' },
+  }
   const coreKpis = $derived(
     overview.classifiers.rule.kpis.flatMap((k) => {
       const st = overview.batch_stats?.rule?.[k]?.[pred.predicted]
@@ -54,7 +59,9 @@
       const lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * 0.1 || 1
       const pos = (x: number) => ((x - (lo - pad)) / (hi - lo + 2 * pad)) * 100
       const status = value === undefined || !Number.isFinite(value) ? 'na' : value < st.p25 ? 'below' : value > st.p75 ? 'above' : 'within'
-      return [{ k, label: meta[k].label, value, status, pos, ...st }]
+      const v = KPI_VISUAL[k]
+      const src = v ? result.images?.[v.key] : undefined
+      return [{ k, label: meta[k].label, value, status, pos, img: src ? { src, caption: v.caption } : null, ...st }]
     }),
   )
   const whyRows = $derived(
@@ -109,6 +116,12 @@
             {#if r.value !== undefined}<div class="dot" style="left:{r.pos(r.value)}%"></div>{/if}
           </div>
           <div class="muted small ktyp">{pred.predicted.replace('_', ' ')} typical: {fmtKpi(r.p25, meta[r.k])} – {fmtKpi(r.p75, meta[r.k])}</div>
+          {#if r.img}
+            <figure class="kimg">
+              <a href={r.img.src} target="_blank" rel="noreferrer"><img src={r.img.src} alt={r.img.caption} loading="lazy" /></a>
+              <figcaption class="muted small">{r.img.caption}</figcaption>
+            </figure>
+          {/if}
         </div>
       {/each}
     </div>
@@ -297,6 +310,9 @@
   .med { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #555; transform: translateX(-1px); }
   .dot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: #1d1d1f; border: 2px solid #fff; box-shadow: 0 0 0 1px #1d1d1f; transform: translate(-50%, -50%); }
   .ktyp { grid-column: 1 / -1; }
+  .kimg { grid-column: 1 / -1; margin: 6px 0 0; }
+  .kimg img { display: block; width: 100%; border-radius: 12px; border: 1px solid #eceef1; }
+  .kimg figcaption { margin-top: 4px; }
   .kstat { font-size: 0.78rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-left: 4px; }
   .kstat.within { background: #dff3e4; color: #1d6b33; }
   .kstat.above, .kstat.below { background: #fff1d6; color: #8a5a00; }

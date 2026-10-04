@@ -185,6 +185,94 @@ def render_panels(
     return names
 
 
+def _save_rgb(path: Path, pixels: np.ndarray) -> None:
+    Image.fromarray(np.clip(pixels, 0, 255).astype(np.uint8)).save(path, format="JPEG", quality=85, optimize=True)
+
+
+def _densest_window(mask: np.ndarray, size: tuple[int, int], stride: int = 16) -> tuple[int, int]:
+    h, w = min(size[0], mask.shape[0]), min(size[1], mask.shape[1])
+    integral = np.pad(mask.astype(np.int64).cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+    best, best_yx = -1, (0, 0)
+    for y in range(0, mask.shape[0] - h + 1, stride):
+        for x in range(0, mask.shape[1] - w + 1, stride):
+            total = integral[y + h, x + w] - integral[y, x + w] - integral[y + h, x] + integral[y, x]
+            if total > best:
+                best, best_yx = total, (y, x)
+    return best_yx
+
+
+def render_kpi_panels(
+    raw: np.ndarray,
+    labels: np.ndarray,
+    etd_n: np.ndarray,
+    cfg: Config,
+    output_dir: Path,
+) -> dict[str, str]:
+    """Small explanatory images for the headline KPIs, from the rule-based segmentation."""
+    factor = max(1, math.ceil(raw.shape[1] / 1000))
+    names = {
+        "kpi_pore": "kpi_pore.jpg",
+        "kpi_cracks": "kpi_cracks.jpg",
+        "kpi_si": "kpi_si.jpg",
+    }
+
+    # Porosity: pores tinted blue on a dimmed BSE thumbnail.
+    h, w = raw.shape[0] // factor, raw.shape[1] // factor
+    gray = raw[: h * factor : factor, : w * factor : factor].astype(np.float32)
+    pore = labels == PORE
+    pore_frac = pore[: h * factor, : w * factor].reshape(h, factor, w, factor).mean(axis=(1, 3))
+    rgb = np.repeat((gray * 0.75)[..., None], 3, axis=2)
+    alpha = np.clip(pore_frac * 1.6, 0, 1)[..., None] * 0.85
+    _save_rgb(output_dir / names["kpi_pore"], rgb * (1 - alpha) + np.array([30, 90, 255]) * alpha)
+
+    # Graphite crack density: crack skeletons in red, in the most cracked region at full resolution.
+    phases = (labels == SI) | (labels == GRAPHITE)
+    cracks = crack_mask(etd_n, phases, cfg.multimodal.crack_k)
+    cracks = np.repeat(np.repeat(cracks, 2, axis=0), 2, axis=1)[: raw.shape[0], : raw.shape[1]]
+    crop_h, crop_w = min(300, raw.shape[0]), min(900, raw.shape[1])
+    y, x = _densest_window(cracks, (crop_h, crop_w))
+    crop = (slice(y, y + crop_h), slice(x, x + crop_w))
+    rgb = np.repeat(raw[crop].astype(np.float32)[..., None], 3, axis=2) * 0.85
+    graphite = labels[crop] == GRAPHITE
+    rgb[graphite] = rgb[graphite] * 0.8 + np.array([89, 99, 110]) * 0.2
+    shown = cracks[crop] & graphite
+    shown = shown | np.roll(shown, 1, axis=0) | np.roll(shown, 1, axis=1)
+    rgb[shown] = (255, 40, 40)
+    _save_rgb(output_dir / names["kpi_cracks"], rgb)
+
+    # Si heterogeneity: Si fraction of solids per 256 px window as an orange heat map.
+    window = 256
+    solids = ~np.isin(labels, (PORE, GAP))
+    si = labels == SI
+    ny, nx = raw.shape[0] // window, raw.shape[1] // window
+    rgb = np.repeat((gray * 0.7 + 50)[..., None], 3, axis=2)
+    if ny and nx:
+        def tiles(m: np.ndarray) -> np.ndarray:
+            return m[: ny * window, : nx * window].reshape(ny, window, nx, window).sum(axis=(1, 3))
+
+        si_t, sol_t = tiles(si), tiles(solids)
+        ok = sol_t >= cfg.kpis.min_window_solid_fraction * window * window
+        frac = np.where(ok, si_t / np.maximum(sol_t, 1), np.nan)
+        if np.isfinite(frac).any():
+            lo, hi = np.nanpercentile(frac, 5), np.nanpercentile(frac, 95)
+            norm = (frac - lo) / (hi - lo) if hi > lo else np.full_like(frac, 0.5)
+            step = window / factor
+            for iy in range(ny):
+                for ix in range(nx):
+                    ys, xs = slice(round(iy * step), round((iy + 1) * step)), slice(round(ix * step), round((ix + 1) * step))
+                    if not ok[iy, ix]:
+                        continue
+                    t = float(np.clip(norm[iy, ix], 0, 1))
+                    color = np.array([255, 236, 190]) * (1 - t) + np.array([225, 80, 0]) * t
+                    rgb[ys, xs] = rgb[ys, xs] * 0.3 + color * 0.7
+            for iy in range(ny + 1):
+                rgb[min(round(iy * step), h - 1), : round(nx * step)] = 255
+            for ix in range(nx + 1):
+                rgb[: round(ny * step), min(round(ix * step), w - 1)] = 255
+    _save_rgb(output_dir / names["kpi_si"], rgb)
+    return names
+
+
 def map_learned_labels(prediction: np.ndarray, cfg: Config) -> np.ndarray:
     labels = LEARNED_TO_ANODE[prediction]
     si = labels == SI
@@ -333,6 +421,7 @@ class InferencePipeline:
             self.cfg,
             output_dir,
         )
+        image_files.update(render_kpi_panels(raw, rule_result.labels, etd_n, self.cfg, output_dir))
         image_urls = {
             key: f"/api/files/jobs/{job_id}/{filename}" for key, filename in image_files.items()
         }
