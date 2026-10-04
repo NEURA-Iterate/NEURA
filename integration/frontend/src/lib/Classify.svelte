@@ -85,8 +85,7 @@
 
 <div class="grid">
   <section class="card">
-    <h2>Classify a sample</h2>
-    <p class="muted">Upload the three detector TIFFs of one location. They must be co-registered (same size) and at the training magnification.</p>
+    <h2 class="title">Classify a sample</h2>
     <FileDrop multiple onfiles={onMulti} disabled={busy}>
       <svg class="icon" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <div class="drop-title">Drop the three TIFFs here</div>
@@ -135,7 +134,7 @@
     </div>
     {#if demo.length}
       <div class="demo">
-        <span class="muted">Or re-run a labelled training sample (sanity check; it was in the training set):</span>
+        <span class="demo-label">Re-run</span>
         <select bind:value={demoId} disabled={busy}>
           <option value="">choose…</option>
           {#each demo as d}<option value={d.image_id}>{d.image_id} ({d.batch.replace('_', ' ')})</option>{/each}
@@ -165,6 +164,7 @@
 </div>
 
 <style>
+  .title { margin-bottom: 16px; }
   .icon { color: #1f5fbf; }
   .drop-title { font-size: 1.05rem; font-weight: 600; color: #1d1d1f; }
   .link { color: #1f5fbf; font-weight: 600; }
@@ -182,6 +182,7 @@
   .name { display: grid; gap: 6px; flex: 1 1 260px; font-size: 0.85rem; font-weight: 600; }
   .name input { font-weight: 400; }
   .big { min-width: 180px; }
+  .demo-label { font-size: 0.85rem; font-weight: 600; }
   .demo { margin-top: 22px; padding-top: 18px; border-top: 1px solid #eef0f3; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .progress { margin-top: 16px; display: grid; gap: 6px; }
   .saved { margin: -4px 0 0; font-size: 0.82rem; }
