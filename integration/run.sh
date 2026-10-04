@@ -49,6 +49,7 @@ fi
 
 if ! python3 - <<'PY' >/dev/null 2>&1
 import fastapi
+import imagecodecs
 import multipart
 import skimage
 import tifffile
