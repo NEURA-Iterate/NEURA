@@ -2,3 +2,10 @@ __pycache__/
 *.egg-info/
 .venv/
 .DS_Store
+artifacts/**/*.npy
+artifacts/**/*.pt
+artifacts/**/staged/
+artifacts/**/prepared/
+artifacts/
+Hackathon-Polaron-eval*/
+Batch_*/
