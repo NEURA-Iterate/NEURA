@@ -1,11 +1,21 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import { classify, classifyDemo, getDemoSamples, getJob } from './api'
   import type { Job, Overview } from './types'
   import Result from './Result.svelte'
   import FileDrop from './FileDrop.svelte'
 
-  let { overview }: { overview: Overview } = $props()
+  let {
+    overview,
+    jobId,
+    onjob,
+    onchange,
+  }: {
+    overview: Overview
+    jobId: string | null
+    onjob: (id: string | null) => void
+    onchange: () => void
+  } = $props()
   let bse = $state<File | null>(null)
   let etd = $state<File | null>(null)
   let inlens = $state<File | null>(null)
@@ -17,11 +27,13 @@
   let timer: ReturnType<typeof setInterval> | null = null
 
   onMount(async () => {
-    const id = new URLSearchParams(location.search).get('job')
-    if (id) poll(id)
     try { demo = await getDemoSamples() } catch { demo = [] }
   })
-  onDestroy(() => timer && clearInterval(timer))
+  $effect(() => {
+    const id = jobId
+    untrack(() => (id ? poll(id) : (job = null)))
+    return stop
+  })
 
   type Slot = 'bse' | 'etd' | 'inlens'
   const slots: { key: Slot; label: string; hint: string }[] = [
@@ -64,26 +76,39 @@
   const size = (f: File) => (f.size > 1e6 ? `${(f.size / 1e6).toFixed(1)} MB` : `${Math.ceil(f.size / 1e3)} kB`)
   const count = $derived([bse, etd, inlens].filter(Boolean).length)
 
+  function stop() {
+    if (timer) clearInterval(timer)
+    timer = null
+  }
   function poll(id: string) {
-    timer && clearInterval(timer)
-    timer = setInterval(async () => {
+    stop()
+    const tick = async () => {
       try {
-        job = await getJob(id)
-        const url = new URL(location.href)
-        if (url.searchParams.get('job') !== id) { url.searchParams.set('job', id); history.replaceState(null, '', url) }
-        if (job.status === 'done' || job.status === 'error') { clearInterval(timer!); timer = null }
-      } catch (e) { error = (e as Error).message; clearInterval(timer!); timer = null }
-    }, 1500)
+        const next = await getJob(id)
+        if (id !== jobId) return
+        job = next
+        if (next.status === 'done' || next.status === 'error') { stop(); onchange() }
+      } catch (e) { error = (e as Error).message; stop(); job = null; onjob(null) }
+    }
+    tick()
+    timer = setInterval(tick, 1500)
   }
   async function run(start: () => Promise<{ job_id: string }>) {
     error = null
     job = { status: 'queued', step: 'uploading', progress: 0 }
-    try { poll((await start()).job_id) } catch (e) { error = (e as Error).message; job = null }
+    try {
+      const { job_id } = await start()
+      onjob(job_id)
+      onchange()
+    } catch (e) { error = (e as Error).message; job = null }
   }
+  const when = (iso: string) =>
+    new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
   const busy = $derived(job?.status === 'queued' || job?.status === 'running')
 </script>
 
 <div class="grid">
+{#if !job}
   <section class="card">
     <h2 class="title">Classify a sample</h2>
     <FileDrop multiple onfiles={onMulti} disabled={busy}>
@@ -143,24 +168,29 @@
       </div>
     {/if}
     {#if error}<div class="warn" style="margin-top:10px">{error}</div>{/if}
-    {#if job && job.status !== 'done'}
-      <div class="progress">
-        {#if job.status === 'error'}
-          <div class="warn">Failed: {job.error}</div>
-        {:else}
-          <div class="pbar"><div style="width:{Math.max(job.progress, 0.03) * 100}%"></div></div>
-          <span class="muted">{job.status === 'queued' ? 'Queued' : job.step}… (≈1–3 min on CPU)</span>
-        {/if}
-      </div>
-    {/if}
   </section>
-
-  {#if job?.status === 'done' && job.result}
-    {#if job.created_at}
-      <p class="muted saved">Saved run from {new Date(job.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}. Find all past runs in the History tab.</p>
-    {/if}
+{:else}
+  <div class="backbar">
+    <button class="back" onclick={() => onjob(null)} aria-label="Back to input">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      New sample
+    </button>
+    {#if job.created_at}<span class="muted saved">Saved run · {when(job.created_at)}</span>{/if}
+  </div>
+  {#if job.status === 'done' && job.result}
     <Result result={job.result} {overview} />
+  {:else}
+    <section class="card progress">
+      {#if job.status === 'error'}
+        <div class="warn">Failed: {job.error}</div>
+      {:else}
+        <h2>{job.status === 'queued' ? 'Queued' : 'Classifying'}…</h2>
+        <div class="pbar"><div style="width:{Math.max(job.progress, 0.03) * 100}%"></div></div>
+        <span class="muted">{job.step} · usually 1–3 min on CPU. You can leave this page; the run is saved to history.</span>
+      {/if}
+    </section>
   {/if}
+{/if}
 </div>
 
 <style>
@@ -184,8 +214,10 @@
   .big { min-width: 180px; }
   .demo-label { font-size: 0.85rem; font-weight: 600; }
   .demo { margin-top: 22px; padding-top: 18px; border-top: 1px solid #eef0f3; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .progress { margin-top: 16px; display: grid; gap: 6px; }
-  .saved { margin: -4px 0 0; font-size: 0.82rem; }
+  .backbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .back { display: inline-flex; align-items: center; gap: 6px; padding-left: 12px; }
+  .progress { display: grid; gap: 10px; }
+  .saved { font-size: 0.82rem; }
   .pbar { height: 8px; background: #eef0f3; border-radius: 999px; overflow: hidden; }
   .pbar div { height: 100%; background: #1f5fbf; border-radius: 999px; transition: width 0.5s; }
 </style>
