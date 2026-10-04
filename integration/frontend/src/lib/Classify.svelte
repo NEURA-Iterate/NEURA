@@ -213,6 +213,7 @@
   .name input { font-weight: 400; }
   .big { min-width: 180px; }
   .demo-label { font-size: 0.85rem; font-weight: 600; }
+  .demo select { flex: 1 1 200px; min-width: 0; max-width: 360px; }
   .demo { margin-top: 22px; padding-top: 18px; border-top: 1px solid #eef0f3; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .backbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .back { display: inline-flex; align-items: center; gap: 6px; padding-left: 12px; }
