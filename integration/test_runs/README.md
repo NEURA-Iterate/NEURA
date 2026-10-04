@@ -7,4 +7,4 @@ Test samples classified with the integration app, one folder per sample:
 - `job.json`: run metadata
 - `*.png` / `*.jpg`: rendered masks, cracks and KPI images
 
-`history.csv` summarises all runs (one row per sample). To make them appear in the app's History tab, copy the folders into `$NEURA_JOBS_DIR`.
+`history.csv` summarises all runs (one row per sample). To show a run in the app's History tab, copy its folder to `$NEURA_JOBS_DIR/<job_id>`, using the `job_id` column of `history.csv`: the app uses the folder name as the job ID and image links depend on it.
