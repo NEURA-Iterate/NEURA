@@ -2,6 +2,7 @@
   import type { Overview, Result, Source, Images } from './types'
   import { batchColor, batchName, flagText, fmtKpi, pct, short, SOURCE_LABEL } from './format'
   import ProbBars from './ProbBars.svelte'
+  import KpiExplainer from './KpiExplainer.svelte'
   import Scatter from './Scatter.svelte'
   import Legend from './Legend.svelte'
 
@@ -105,7 +106,11 @@
         const value = avg(bs.map((b) => b.value)), median = avg(bs.map((b) => b.median))
         const rel = median ? ((value - median) / Math.abs(median)) * 100 : 0
         const dir = Math.abs(z) < 1 ? 'typical' : z > 0 ? 'higher' : 'lower'
-        return { kpi, label: bs[0].label, z, value, median, rel, dir, why: KPI_WHY[kpi] ?? '' }
+        const pts = bs.flatMap((b) => Object.values(overview.batch_stats?.[b.source]?.[kpi] ?? {}).flatMap((st) => [st.p25, st.p75]))
+        const all = [...pts, value, median].filter(Number.isFinite)
+        const pad = (Math.max(...all) - Math.min(...all)) * 0.15
+        const range: [number, number] | null = all.length > 1 ? [Math.max(0, Math.min(...all) - pad), Math.max(...all) + pad] : null
+        return { kpi, label: bs[0].label, z, value, median, rel, dir, range, why: KPI_WHY[kpi] ?? '' }
       })
       .sort((a, b) => Math.abs(b.z) - Math.abs(a.z))
   })
@@ -116,21 +121,19 @@
     const [lo3, hi3] = pred.interval?.Batch_3 ?? [p3, p3]
     const closest = pred.predicted === 'Batch_3' ? pred.runner_up : pred.predicted
     const reasons: string[] = []
-    if (pred.outlier) reasons.push("This sample doesn't look like any batch we've seen before, including the baseline. It could be a new kind of change.")
-    for (const d of drivers.filter((d) => d.dir !== 'typical'))
-      reasons.push(`${d.label} is ${Math.abs(d.rel).toFixed(0)}% ${d.dir} than the baseline.`)
-    if (flags.length) reasons.push('The image has quality problems (see below), so the measurements are less certain.')
-    for (const s of segRows.filter((s) => s.level === 'large'))
-      reasons.push(`The two segmentation methods disagree on ${s.label.toLowerCase()} by ${s.diff.toFixed(0)}%.`)
+    const off = drivers.some((d) => d.dir !== 'typical')
+    if (pred.outlier) reasons.push('Unlike any known batch')
+    if (flags.length) reasons.push('Image quality issues')
+    for (const s of segRows.filter((s) => s.level === 'large')) reasons.push(`Segmentation methods disagree on ${s.label.toLowerCase()}`)
     if (!pred.outlier && p3 >= ACCEPT_AT && !flags.length && lo3 >= 0.5) {
-      if (!drivers.some((d) => d.dir !== 'typical')) reasons.push('All key measurements are within the normal baseline range.')
-      return { kind: 'accept', word: 'Accept', line: `Consistent with the approved baseline: ${pct(p3)} probability it matches Batch 3.`, reasons }
+      if (!off) reasons.push('All KPIs within baseline range')
+      return { kind: 'accept', word: 'Accept', reasons: [`Baseline match ${pct(p3)}`, ...reasons] }
     }
     if (!pred.outlier && p3 <= REJECT_AT && hi3 <= 0.5)
-      return { kind: 'reject', word: 'Reject', line: `Changed from the baseline: only ${pct(p3)} probability it matches Batch 3. It most resembles ${batchName(closest)}, a known type of variation.`, reasons }
-    if (p3 > REJECT_AT && p3 < ACCEPT_AT) reasons.push(`The probability of matching the baseline (${pct(p3)}) is between the accept (${pct(ACCEPT_AT)}) and reject (${pct(REJECT_AT)}) limits.`)
-    if ((p3 >= ACCEPT_AT && lo3 < 0.5) || (p3 <= REJECT_AT && hi3 > 0.5)) reasons.push(`The uncertainty is wide: the baseline probability could plausibly be anywhere from ${pct(lo3)} to ${pct(hi3)}.`)
-    return { kind: 'investigate', word: 'Investigate', line: 'Not conclusive. A materials expert should review this sample before a decision is made.', reasons }
+      return { kind: 'reject', word: 'Reject', reasons: [`Baseline match only ${pct(p3)}`, `Closest to ${batchName(closest)}`, ...reasons] }
+    if (p3 > REJECT_AT && p3 < ACCEPT_AT) reasons.push(`Baseline match ${pct(p3)}, between limits`)
+    if ((p3 >= ACCEPT_AT && lo3 < 0.5) || (p3 <= REJECT_AT && hi3 > 0.5)) reasons.push(`Wide uncertainty (${pct(lo3)}–${pct(hi3)})`)
+    return { kind: 'investigate', word: 'Investigate', reasons }
   })
 
   // Segmentation uncertainty for this upload: rule vs DINO masks, and rule boundary reassignment range.
@@ -159,17 +162,10 @@
         {result.known_batch === pred.predicted ? '✓ matches' : '✗ differs'} (training sample, so this is an in-sample check)</div>
     {/if}
   </div>
-  <div class="qc qc-{qc.kind}">
-    <div class="muted">QC decision vs the approved baseline</div>
-    <div class="qcword">{qc.word}</div>
-    <div class="qcline">{qc.line}</div>
-    {#if qc.reasons.length}<ul class="qcwhy">{#each qc.reasons as r}<li>{r}</li>{/each}</ul>{/if}
-  </div>
   <div class="verdict">
     <div class="muted">Closest match</div>
     <div class="big" style="color:{batchColor(pred.predicted)}">{batchName(pred.predicted)}</div>
     <div class="conf"><span class="pctv">{pct(pred.probabilities[pred.predicted])}</span> <span class="pill tier-{pred.tier}">{pred.tier === 'review' ? 'needs review' : `${pred.tier} confidence`}</span></div>
-    <div class="muted small policy">Accept if P(baseline) ≥ {pct(ACCEPT_AT)} and its uncertainty range stays above 50%; reject if ≤ {pct(REJECT_AT)} and it stays below 50%; otherwise investigate. These limits are a policy choice for the QC team, not fitted to data.</div>
   </div>
   <div class="flags">
     {#if pred.outlier}<div class="warn"><b>Unlike anything seen before:</b> this sample doesn't closely match the baseline or either known variant, so the "closest match" above is only a rough guide.</div>{/if}
@@ -180,7 +176,14 @@
 </section>
 
 <section class="card">
-  <h2>What's different from the baseline</h2>
+  <h2>Quality Control</h2>
+  <div class="qc qc-{qc.kind}">
+    <div class="muted">Decision vs the approved baseline (Batch 3)</div>
+    <div class="qcword">{qc.word}</div>
+    {#if qc.reasons.length}<ul class="qcwhy">{#each qc.reasons as r}<li>{r}</li>{/each}</ul>{/if}
+  </div>
+  <div class="muted small policy">Accept if P(baseline) ≥ {pct(ACCEPT_AT)} and its uncertainty range stays above 50%; reject if ≤ {pct(REJECT_AT)} and it stays below 50%; otherwise investigate. These limits are a policy choice for the QC team, not fitted to data.</div>
+  <h3 class="sub">What's different from the baseline</h3>
   <ul class="drivers">
     {#each drivers as d}
       <li class="drv-{d.dir}">
@@ -192,8 +195,8 @@
           {:else}
             is {Math.abs(d.rel).toFixed(0)}% {d.dir} than the baseline median ({fmtKpi(d.value, meta[d.kpi])} vs {fmtKpi(d.median, meta[d.kpi])}; {Math.abs(d.z).toFixed(1)} standard deviations).
           {/if}
-          {#if d.why}<div class="muted small">{d.why}</div>{/if}
         </div>
+        {#if d.range}<KpiExplainer kpi={d.kpi} sample={d.value} baseline={d.median} lo={d.range[0]} hi={d.range[1]} fmt={(x) => fmtKpi(x, meta[d.kpi])} />{/if}
       </li>
     {/each}
   </ul>
@@ -407,8 +410,7 @@
   .qc-investigate { background: #fff4e0; color: #9a5b00; }
   .qc-reject { background: #fdecec; color: #c62828; }
   .qcword { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.02em; line-height: 1.15; }
-  .qcline { font-size: 1.05rem; color: #1f2937; margin-top: 4px; }
-  .qcwhy { text-align: left; display: inline-block; margin: 10px auto 0; color: #374151; font-size: 0.95rem; }
+    .qcwhy { text-align: left; display: inline-block; margin: 10px auto 0; color: #374151; font-size: 0.95rem; }
   .policy { max-width: 640px; margin: 10px auto 0; }
   .sub { font-size: 1rem; margin: 18px 0 6px; }
   .seg { font-size: 0.8rem; font-weight: 700; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
@@ -416,11 +418,11 @@
   .seg-moderate { background: #fff4e0; color: #9a5b00; }
   .seg-large { background: #fdecec; color: #c62828; }
   .drivers { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-  .drivers li { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: start; }
+  .drivers li { display: grid; grid-template-columns: 130px 1fr 300px; gap: 12px; align-items: start; }
   .dtag { font-size: 0.85rem; font-weight: 700; border-radius: 999px; padding: 4px 10px; text-align: center; background: #eef0f3; color: #4b5563; }
   .drv-higher .dtag, .drv-lower .dtag { background: #fdecec; color: #c62828; }
   .drv-typical .dtag { background: #e8f5ec; color: #1a7f37; }
-  @media (max-width: 600px) { .drivers li { grid-template-columns: 1fr; } .qcword { font-size: 2rem; } }
+  @media (max-width: 900px) { .drivers li { grid-template-columns: 1fr; } .qcword { font-size: 2rem; } }
   .big { font-size: 3rem; font-weight: 750; line-height: 1.1; margin: 4px 0 8px; letter-spacing: -0.01em; }
   .conf { display: inline-flex; align-items: center; gap: 10px; }
   .pctv { font-size: 1.6rem; font-weight: 600; }
