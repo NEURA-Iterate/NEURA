@@ -17,7 +17,12 @@
   const isUsed = (b: { source: Source; kpi: string }) => overview.classifiers[b.source].kpis.includes(b.kpi)
   const baselineRows = $derived(showAllBaseline ? result.baseline.kpis : result.baseline.kpis.filter(isUsed))
   const used = $derived(new Set(overview.classifiers[featSource].kpis))
-  const kpiList = $derived(Object.keys(meta).sort((a, b) => Number(used.has(b)) - Number(used.has(a))))
+  let showAllFeatures = $state(false)
+  const kpiList = $derived(
+    Object.keys(meta)
+      .filter((k) => showAllFeatures || used.has(k))
+      .sort((a, b) => Number(used.has(b)) - Number(used.has(a))),
+  )
   const sampleVal = (s: Source, k: string) => (result.kpis[s] as any)?.[k]?.value as number | undefined
 
   // visuals
@@ -232,7 +237,7 @@
     <tbody>
       {#each kpiList as k}
         {@const sv = sampleVal(featSource, k)}
-        <tr class:used={used.has(k)}>
+        <tr class:used={showAllFeatures && used.has(k)}>
           <td>{meta[k].label}{meta[k].unit && meta[k].unit !== '%' ? ` (${meta[k].unit})` : ''}</td>
           <td class="num"><b>{fmtKpi(sv, meta[k])}</b>
             {#if featSource === 'rule' && Number.isFinite(result.kpis.rule[k]?.lo) && Number.isFinite(result.kpis.rule[k]?.hi)}<br /><small class="muted">{fmtKpi(result.kpis.rule[k].lo, meta[k])}–{fmtKpi(result.kpis.rule[k].hi, meta[k])}</small>{/if}</td>
@@ -247,7 +252,12 @@
       {/each}
     </tbody>
   </table></div>
-  <p class="muted small">Bold rows are used by this classifier. Small numbers under the sample (rule masks) are the range when pixels at phase boundaries are reassigned.</p>
+  <div class="btoggle">
+    <button onclick={() => (showAllFeatures = !showAllFeatures)}>
+      {showAllFeatures ? 'Show only classifier KPIs' : `Show all ${Object.keys(meta).length} measurements`}
+    </button>
+    <span class="muted small">{showAllFeatures ? 'Bold rows are used by this classifier. ' : ''}{featSource === 'rule' ? 'Small numbers under the sample are the range when pixels at phase boundaries are reassigned.' : ''}</span>
+  </div>
 </section>
 
 <section class="card">
