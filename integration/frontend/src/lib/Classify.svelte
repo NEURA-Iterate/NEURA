@@ -3,6 +3,7 @@
   import { classify, classifyDemo, getDemoSamples, getJob } from './api'
   import type { Job, Overview } from './types'
   import Result from './Result.svelte'
+  import FileDrop from './FileDrop.svelte'
 
   let { overview }: { overview: Overview } = $props()
   let bse = $state<File | null>(null)
@@ -22,18 +23,46 @@
   })
   onDestroy(() => timer && clearInterval(timer))
 
-  const pick = (e: Event) => (e.currentTarget as HTMLInputElement).files?.[0] ?? null
+  type Slot = 'bse' | 'etd' | 'inlens'
+  const slots: { key: Slot; label: string; hint: string }[] = [
+    { key: 'bse', label: 'BSE', hint: 'Backscatter' },
+    { key: 'etd', label: 'ETD or SE', hint: 'Secondary electrons · cracks' },
+    { key: 'inlens', label: 'Inlens', hint: 'In-lens detector' },
+  ]
+  let unmatched = $state<string[]>([])
+  let nameEdited = false
 
-  function onMulti(e: Event) {
-    for (const f of Array.from((e.currentTarget as HTMLInputElement).files ?? [])) {
-      const n = f.name.toLowerCase()
-      if (n.includes('_bse')) bse = f
-      else if (n.includes('_inlens')) inlens = f
-      else if (n.includes('_etd') || n.includes('_se')) etd = f
-    }
-    const name = bse?.name.replace(/_BSE\.tiff?$/i, '')
-    if (name && !sampleId) sampleId = name
+  const getSlot = (k: Slot) => (k === 'bse' ? bse : k === 'etd' ? etd : inlens)
+  function setSlot(k: Slot, f: File | null) {
+    if (k === 'bse') bse = f
+    else if (k === 'etd') etd = f
+    else inlens = f
+    if (k === 'bse' && f && !nameEdited) sampleId = f.name.replace(/_BSE\.tiff?$/i, '').replace(/\.tiff?$/i, '')
   }
+  function detect(name: string): Slot | null {
+    const n = name.toLowerCase()
+    if (n.includes('_bse')) return 'bse'
+    if (n.includes('_inlens')) return 'inlens'
+    if (n.includes('_etd') || n.includes('_se')) return 'etd'
+    return null
+  }
+  function onMulti(files: File[]) {
+    const missed: string[] = []
+    for (const f of files) {
+      const k = detect(f.name)
+      if (k) setSlot(k, f)
+      else missed.push(f.name)
+    }
+    unmatched = missed
+  }
+  function clearAll() {
+    bse = etd = inlens = null
+    sampleId = ''
+    nameEdited = false
+    unmatched = []
+  }
+  const size = (f: File) => (f.size > 1e6 ? `${(f.size / 1e6).toFixed(1)} MB` : `${Math.ceil(f.size / 1e3)} kB`)
+  const count = $derived([bse, etd, inlens].filter(Boolean).length)
 
   function poll(id: string) {
     timer && clearInterval(timer)
@@ -58,14 +87,51 @@
   <section class="card">
     <h2>Classify a sample</h2>
     <p class="muted">Upload the three detector TIFFs of one location. They must be co-registered (same size) and at the training magnification.</p>
-    <div class="upload">
-      <label class="multi">Select all three at once <input type="file" multiple accept=".tif,.tiff" onchange={onMulti} disabled={busy} /></label>
-      <label>BSE <input type="file" accept=".tif,.tiff" onchange={(e) => (bse = pick(e))} disabled={busy} /><span>{bse?.name ?? 'required'}</span></label>
-      <label>ETD or SE <input type="file" accept=".tif,.tiff" onchange={(e) => (etd = pick(e))} disabled={busy} /><span>{etd?.name ?? 'required (cracks)'}</span></label>
-      <label>Inlens <input type="file" accept=".tif,.tiff" onchange={(e) => (inlens = pick(e))} disabled={busy} /><span>{inlens?.name ?? 'required'}</span></label>
-      <label>Sample name <input type="text" bind:value={sampleId} placeholder="optional" disabled={busy} /></label>
-      <button class="primary" disabled={busy || !bse || !etd || !inlens}
-        onclick={() => run(() => classify({ bse: bse!, etd: etd!, inlens: inlens! }, sampleId || undefined))}>Classify</button>
+    <FileDrop multiple onfiles={onMulti} disabled={busy}>
+      <svg class="icon" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="drop-title">Drop the three TIFFs here</div>
+      <div class="muted">or <span class="link">browse</span> · files are matched by <code>_BSE</code>, <code>_ETD</code>/<code>_SE</code>, <code>_Inlens</code></div>
+    </FileDrop>
+    {#if unmatched.length}
+      <div class="warn" style="margin-top:10px">Couldn't tell the detector for {unmatched.join(', ')}. Drop it onto the matching slot below.</div>
+    {/if}
+
+    <div class="slots">
+      {#each slots as s (s.key)}
+        {@const f = getSlot(s.key)}
+        <FileDrop compact filled={!!f} disabled={busy} onfiles={(fs) => { setSlot(s.key, fs[0]); unmatched = [] }}>
+          <div class="slot">
+            <div class="slot-head">
+              <span class="slot-label">{s.label}</span>
+              {#if f}
+                <button class="remove" title="Remove" aria-label="Remove {s.label}" disabled={busy}
+                  onclick={(e) => { e.stopPropagation(); setSlot(s.key, null) }}>×</button>
+              {:else}
+                <span class="req">required</span>
+              {/if}
+            </div>
+            {#if f}
+              <div class="fname" title={f.name}>{f.name}</div>
+              <div class="muted small">{size(f)}</div>
+            {:else}
+              <div class="muted small">{s.hint}</div>
+              <div class="muted small">Drop or click</div>
+            {/if}
+          </div>
+        </FileDrop>
+      {/each}
+    </div>
+
+    <div class="actions">
+      <label class="name">
+        <span>Sample name</span>
+        <input type="text" bind:value={sampleId} oninput={() => (nameEdited = true)} placeholder="optional" disabled={busy} />
+      </label>
+      {#if count}<button class="ghost" onclick={clearAll} disabled={busy}>Clear</button>{/if}
+      <button class="primary big" disabled={busy || !bse || !etd || !inlens}
+        onclick={() => run(() => classify({ bse: bse!, etd: etd!, inlens: inlens! }, sampleId || undefined))}>
+        {busy ? 'Classifying…' : `Classify${count < 3 ? ` (${count}/3)` : ''}`}
+      </button>
     </div>
     {#if demo.length}
       <div class="demo">
@@ -99,13 +165,26 @@
 </div>
 
 <style>
-  .upload { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; align-items: end; }
-  .upload label { display: grid; gap: 3px; font-size: 0.85rem; font-weight: 600; }
-  .upload label span { font-weight: 400; color: #666; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .upload .multi { grid-column: 1 / -1; font-weight: 400; }
-  .demo { margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .progress { margin-top: 14px; display: grid; gap: 4px; }
+  .icon { color: #1f5fbf; }
+  .drop-title { font-size: 1.05rem; font-weight: 600; color: #1d1d1f; }
+  .link { color: #1f5fbf; font-weight: 600; }
+  code { font-size: 0.8rem; background: #eef0f3; padding: 1px 5px; border-radius: 6px; }
+  .slots { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .slot { display: grid; gap: 2px; min-width: 0; }
+  .slot-head { display: flex; justify-content: space-between; align-items: center; min-height: 28px; }
+  .slot-label { font-weight: 600; font-size: 0.92rem; color: #1d1d1f; }
+  .req { font-size: 0.72rem; color: #8a8f98; background: #eef0f3; padding: 2px 8px; border-radius: 999px; }
+  .remove { width: 28px; height: 28px; padding: 0; border-radius: 999px; font-size: 1.1rem; line-height: 1; color: #666; border-color: transparent; background: transparent; }
+  .remove:hover { background: #e8ebef; }
+  .fname { font-size: 0.85rem; color: #1d6b33; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .small { font-size: 0.78rem; }
+  .actions { margin-top: 18px; display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+  .name { display: grid; gap: 6px; flex: 1 1 260px; font-size: 0.85rem; font-weight: 600; }
+  .name input { font-weight: 400; }
+  .big { min-width: 180px; }
+  .demo { margin-top: 22px; padding-top: 18px; border-top: 1px solid #eef0f3; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .progress { margin-top: 16px; display: grid; gap: 6px; }
   .saved { margin: -4px 0 0; font-size: 0.82rem; }
-  .pbar { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
-  .pbar div { height: 100%; background: #1f5fbf; transition: width 0.5s; }
+  .pbar { height: 8px; background: #eef0f3; border-radius: 999px; overflow: hidden; }
+  .pbar div { height: 100%; background: #1f5fbf; border-radius: 999px; transition: width 0.5s; }
 </style>

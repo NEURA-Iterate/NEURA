@@ -44,10 +44,11 @@
 </main>
 
 <style>
-  header { display: flex; align-items: center; justify-content: space-between; padding: 10px 24px; background: #14213d; color: #fff; }
+  header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 12px 24px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); border-bottom: 1px solid #eceef1; color: #1d1d1f; }
   .brand { font-size: 1.05rem; }
-  nav { display: flex; gap: 6px; }
-  nav button { background: transparent; color: #cfd6e4; border: 1px solid transparent; }
-  nav button.active { background: #fff; color: #14213d; }
+  nav { display: flex; gap: 4px; padding: 4px; background: #f1f3f6; border-radius: 14px; }
+  nav button { background: transparent; color: #555; border: 1px solid transparent; border-radius: 10px; min-height: 40px; padding: 8px 16px; }
+  nav button:hover:not(:disabled) { background: #e6e9ee; }
+  nav button.active { background: #fff; color: #1d1d1f; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1); }
   main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 60px; }
 </style>
