@@ -30,3 +30,12 @@ export function legendItems(legend: Legend | undefined): { name: string; color: 
 }
 
 export const SOURCE_LABEL: Record<string, string> = { rule: 'Rule masks', learned: 'DINO masks' }
+
+const FLAG_TEXT: Record<string, { title: string; body: string }> = {
+  low_si_contrast: { title: 'Low silicon contrast', body: 'silicon is hard to tell apart from its surroundings in the BSE image, so silicon measurements may be less reliable.' },
+  polishing_streaks: { title: 'Polishing streaks', body: 'surface scratches are visible and may be mistaken for cracks or pores.' },
+  charging: { title: 'Charging artefacts', body: 'bright patches from beam charging may distort the segmentation.' },
+  detector_disagreement: { title: 'Detectors disagree', body: 'the BSE, SE and Inlens images do not line up well. Check they show the same location at the same magnification.' },
+}
+export const flagText = (f: string) =>
+  FLAG_TEXT[f] ?? { title: 'Image-quality flag', body: f.replace(/_/g, ' ') }

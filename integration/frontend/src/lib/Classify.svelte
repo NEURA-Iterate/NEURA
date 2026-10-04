@@ -175,7 +175,7 @@
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       New sample
     </button>
-    {#if job.created_at}<span class="muted saved">Saved run · {when(job.created_at)}</span>{/if}
+    {#if job.created_at}<span class="muted saved">{when(job.created_at)}</span>{/if}
   </div>
   {#if job.status === 'done' && job.result}
     <Result result={job.result} {overview} />

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Overview, Result, Source, Images } from './types'
-  import { batchColor, fmtKpi, pct, short, SOURCE_LABEL } from './format'
+  import { batchColor, flagText, fmtKpi, pct, short, SOURCE_LABEL } from './format'
   import ProbBars from './ProbBars.svelte'
   import Scatter from './Scatter.svelte'
   import Legend from './Legend.svelte'
@@ -45,28 +45,27 @@
     { source: 'learned', x: 'si_cv_w256', y: 'graphite_aspect_ratio_median', title: 'Si heterogeneity vs graphite shape (DINO)' },
   ]
   const flags = $derived(
-    Array.isArray(result.trust_flags) ? result.trust_flags.filter(Boolean) : result.trust_flags ? String(result.trust_flags).split(/[;,]\s*/).filter(Boolean) : [],
+    Array.isArray(result.trust_flags) ? result.trust_flags.filter(Boolean) : result.trust_flags ? String(result.trust_flags).split(/[;,\s]+/).filter(Boolean) : [],
   )
 </script>
 
 <section class="card head">
-  <div>
-    <div class="muted">Sample</div>
-    <h2>{result.sample_id}</h2>
+  <div class="sample">
+    <span class="muted">Sample</span> <b>{result.sample_id}</b>
     {#if result.known_batch}
       <div class="muted">Known label: <b>{result.known_batch.replace('_', ' ')}</b>
         {result.known_batch === pred.predicted ? '✓ matches' : '✗ differs'} (training sample, so this is an in-sample check)</div>
     {/if}
   </div>
-  <div class="verdict" style="border-color:{batchColor(pred.predicted)}">
+  <div class="verdict">
     <div class="muted">Most likely</div>
     <div class="big" style="color:{batchColor(pred.predicted)}">{pred.predicted.replace('_', ' ')}</div>
-    <div>{pct(pred.probabilities[pred.predicted])} <span class="pill tier-{pred.tier}">{pred.tier === 'review' ? 'needs review' : `${pred.tier} confidence`}</span></div>
+    <div class="conf"><span class="pctv">{pct(pred.probabilities[pred.predicted])}</span> <span class="pill tier-{pred.tier}">{pred.tier === 'review' ? 'needs review' : `${pred.tier} confidence`}</span></div>
   </div>
   <div class="flags">
     {#if pred.outlier}<div class="warn"><b>Unusual sample:</b> its KPIs are atypical for every known batch (typicality p &lt; 0.01). It may belong to none of them.</div>{/if}
     {#if pred.ambiguous && !pred.outlier}<div class="warn"><b>Ambiguous:</b> no batch reaches 70%.</div>{/if}
-    {#each flags as f}<div class="warn">Image-quality flag: <b>{f}</b></div>{/each}
+    {#each flags as f}{@const m = flagText(f)}<div class="warn"><b>{m.title}:</b> {m.body}</div>{/each}
     {#each result.warnings as w}<div class="warn">{w}</div>{/each}
   </div>
 </section>
@@ -140,7 +139,7 @@
     {/if}
     <span class="muted">(typicality p: rule {result.baseline.typicality.rule.toFixed(3)}, DINO {result.baseline.typicality.learned.toFixed(3)}; ≥ 0.05 = consistent)</span>
   </p>
-  <table>
+  <div class="tscroll"><table>
     <thead><tr><th>KPI</th><th>Masks</th><th class="num">Sample</th><th class="num">B3 median</th><th class="num">B3 5–95%</th><th>Deviation (z)</th><th class="num">B3 percentile</th></tr></thead>
     <tbody>
       {#each result.baseline.kpis as b}
@@ -154,7 +153,7 @@
         </tr>
       {/each}
     </tbody>
-  </table>
+  </table></div>
   <p class="muted small">Bold rows are KPIs the classifiers use. z on the log/logit scale; |z| &lt; 1 counts as typical.</p>
 </section>
 
@@ -163,7 +162,7 @@
   <div class="pairsel">
     <label>Masks <select bind:value={featSource}><option value="rule">{SOURCE_LABEL.rule}</option><option value="learned">{SOURCE_LABEL.learned}</option></select></label>
   </div>
-  <table>
+  <div class="tscroll"><table>
     <thead>
       <tr><th>KPI</th><th class="num">This sample</th>
         {#each classes as c}<th class="num" style="color:{batchColor(c)}">{short(c)} median [IQR]</th>{/each}
@@ -187,7 +186,7 @@
         </tr>
       {/each}
     </tbody>
-  </table>
+  </table></div>
   <p class="muted small">Bold rows are used by this classifier. Small numbers under the sample (rule masks) are the range when pixels at phase boundaries are reassigned.</p>
 </section>
 
@@ -229,12 +228,18 @@
 </section>
 
 <style>
-  .head { display: grid; grid-template-columns: 1fr auto; gap: 12px 24px; align-items: start; }
-  .head .flags { grid-column: 1 / -1; display: grid; gap: 6px; }
+  .head { display: grid; gap: 14px; }
+  .sample { font-size: 0.95rem; }
+  .flags { display: grid; gap: 6px; }
   .flags:empty { display: none; }
-  .verdict { border-left: 5px solid; padding-left: 14px; }
-  .big { font-size: 1.6rem; font-weight: 700; }
+  .verdict { text-align: center; padding: 8px 0 12px; }
+  .big { font-size: 3rem; font-weight: 750; line-height: 1.1; margin: 4px 0 8px; letter-spacing: -0.01em; }
+  .conf { display: inline-flex; align-items: center; gap: 10px; }
+  .pctv { font-size: 1.6rem; font-weight: 600; }
+  .conf .pill { font-size: 0.95rem; padding: 4px 12px; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .cols > *, .sub > * { min-width: 0; }
+  .tscroll { overflow-x: auto; }
   .sub { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
   .small { font-size: 0.78rem; }
   .expl { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 4px; }
@@ -247,11 +252,12 @@
   .pairsel { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 0.88rem; }
   button.sel { background: #14213d; color: #fff; border-color: #14213d; }
   tr.used td { font-weight: 600; }
-  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
   .vis { display: grid; grid-template-columns: 1fr; gap: 10px; }
   .vis.zoomed { grid-template-columns: repeat(4, 1fr); }
   .vis figure { margin: 0; }
   .vis img { width: 100%; border: 1px solid #ddd; border-radius: 4px; background: #000; image-rendering: auto; }
   figcaption { font-size: 0.8rem; }
+  @media (max-width: 600px) { .ev { grid-template-columns: minmax(0, 1.2fr) 56px minmax(0, 1fr); } .big { font-size: 2.5rem; } }
   @media (max-width: 1000px) { .cols, .sub { grid-template-columns: 1fr; } .vis.zoomed { grid-template-columns: 1fr 1fr; } }
 </style>
