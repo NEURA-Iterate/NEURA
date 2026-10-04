@@ -429,6 +429,7 @@ def create_app(
     repo_root: str | Path = REPO_ROOT,
 ) -> FastAPI:
     data_path = Path(data_dir or os.environ.get("NEURA_DATA_DIR", "/home/ubuntu/data/neura"))
+    demo_enabled = os.environ.get("NEURA_DEMO_SAMPLES", "1") != "0"
     jobs_path = Path(jobs_dir or os.environ.get("NEURA_JOBS_DIR", "/home/ubuntu/data/runs/app_jobs"))
     artifacts_path = Path(artifacts_dir)
     validation_path = Path(validation_dir)
@@ -629,6 +630,8 @@ def create_app(
 
     @app.post("/api/classify-demo")
     def classify_demo(request: DemoRequest) -> dict[str, str]:
+        if not demo_enabled:
+            raise HTTPException(status_code=404, detail="Demo samples are disabled on this server")
         samples = {sample.image_id: sample for sample in find_bse_images(data_path)}
         image = samples.get(request.image_id)
         if image is None:
@@ -638,6 +641,8 @@ def create_app(
 
     @app.get("/api/demo-samples")
     def demo_samples() -> list[dict[str, str]]:
+        if not demo_enabled:
+            return []
         return [
             {"image_id": image.image_id, "batch": image.batch}
             for image in find_bse_images(data_path)

@@ -123,14 +123,16 @@ def pixel_intervals(
     kpi_fn: Callable[[np.ndarray], dict],
     cfg: UncertaintyConfig,
     si_min_area_px: int = 30,
+    map_fn: Callable = map,
 ) -> dict:
-    """``<kpi>_pix_lo`` / ``_pix_hi`` for the key KPIs, plus the measured edge blur."""
+    """``<kpi>_pix_lo`` / ``_pix_hi`` for the key KPIs, plus the measured edge blur.
+
+    ``map_fn`` (e.g. ``ThreadPoolExecutor.map``) lets the perturbed KPI evaluations run concurrently."""
     labels = res.labels
     blur = edge_blur_px(res.n, labels == SI, labels == GRAPHITE, cfg.edge_profile_px)
     delta = int(np.clip(np.round(blur / 2), 1, 4)) if np.isfinite(blur) else 1
     values = {c: [nominal.get(c, np.nan)] for c in KEY_COLUMNS}
-    for lab in perturbed_labels(res, delta, cfg, si_min_area_px).values():
-        k = kpi_fn(lab)
+    for k in map_fn(kpi_fn, perturbed_labels(res, delta, cfg, si_min_area_px).values()):
         for c in KEY_COLUMNS:
             values[c].append(k.get(c, np.nan))
     out = {"qc_edge_blur_px": blur, "qc_pixel_delta_px": delta}

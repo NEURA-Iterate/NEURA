@@ -5,6 +5,7 @@ import math
 import os
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -290,6 +291,10 @@ class InferencePipeline:
         feature_meta_path: str | Path,
     ) -> None:
         torch.set_num_threads(os.cpu_count() or 1)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Rule segmentation/KPIs (CPU) run alongside DINO; the 4 pixel-uncertainty KPI passes run in parallel.
+        self._rule_branch = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rule")
+        self._kpi_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="kpi")
         self.classifier = classifier
         self.cfg = Config()
         metadata = json.loads(Path(feature_meta_path).read_text(encoding="utf-8"))
@@ -300,7 +305,7 @@ class InferencePipeline:
         self.backbone = Dinov2Backbone(
             metadata["model_id"],
             upsample=int(metadata.get("upsample", 1)),
-            device="cpu",
+            device=self.device,
         ).eval()
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
         self.head = build_head(
@@ -309,7 +314,7 @@ class InferencePipeline:
             checkpoint["n_classes"],
         )
         self.head.load_state_dict(checkpoint["state_dict"])
-        self.head.eval()
+        self.head.to(self.device).eval()
 
     @staticmethod
     def _notify(progress: Callable[[str, float], None] | None, step: str, value: float) -> None:
@@ -330,40 +335,45 @@ class InferencePipeline:
         output_dir.mkdir(parents=True, exist_ok=True)
         timings: dict[str, float] = {}
 
-        self._notify(progress, "rule analysis", 0.05)
-        step = time.perf_counter()
-        raw, etd, inlens = load_detectors(image, self.cfg)
-        if etd is None or inlens is None:
-            raise ValueError("BSE, ETD (or SE), and Inlens detector files are all required")
-        if etd.shape != raw.shape:
-            raise ValueError(f"ETD shape {etd.shape} does not match BSE shape {raw.shape}")
-        if inlens.shape != raw.shape:
-            raise ValueError(f"Inlens shape {inlens.shape} does not match BSE shape {raw.shape}")
-        rule_result = segment_image(raw, self.cfg, etd, inlens)
-        rule_kpis, _, _ = compute_kpis(
-            rule_result,
-            self.cfg.kpis,
-            self.cfg.multimodal.crack_k,
-        )
-        if self.cfg.uncertainty.pixel:
-            etd_n = rule_result.mm.etd_n if rule_result.mm is not None else None
-            rule_kpis.update(
-                pixel_intervals(
-                    rule_result,
-                    rule_kpis,
-                    lambda labels: kpis_from_labels(
-                        labels,
-                        rule_result.n,
-                        self.cfg.kpis,
-                        etd_n,
-                        self.cfg.multimodal.crack_k,
-                    )[0],
-                    self.cfg.uncertainty,
-                    self.cfg.cleanup.si_min_area_px,
-                )
+        def rule_branch():
+            step = time.perf_counter()
+            raw, etd, inlens = load_detectors(image, self.cfg)
+            if etd is None or inlens is None:
+                raise ValueError("BSE, ETD (or SE), and Inlens detector files are all required")
+            if etd.shape != raw.shape:
+                raise ValueError(f"ETD shape {etd.shape} does not match BSE shape {raw.shape}")
+            if inlens.shape != raw.shape:
+                raise ValueError(f"Inlens shape {inlens.shape} does not match BSE shape {raw.shape}")
+            rule_result = segment_image(raw, self.cfg, etd, inlens)
+            rule_kpis, _, _ = compute_kpis(
+                rule_result,
+                self.cfg.kpis,
+                self.cfg.multimodal.crack_k,
             )
-        flags = str(trust_flags(pd.DataFrame([rule_kpis])).iloc[0])
-        timings["rule"] = time.perf_counter() - step
+            if self.cfg.uncertainty.pixel:
+                etd_n = rule_result.mm.etd_n if rule_result.mm is not None else None
+                rule_kpis.update(
+                    pixel_intervals(
+                        rule_result,
+                        rule_kpis,
+                        lambda labels: kpis_from_labels(
+                            labels,
+                            rule_result.n,
+                            self.cfg.kpis,
+                            etd_n,
+                            self.cfg.multimodal.crack_k,
+                        )[0],
+                        self.cfg.uncertainty,
+                        self.cfg.cleanup.si_min_area_px,
+                        map_fn=self._kpi_pool.map,
+                    )
+                )
+            flags = str(trust_flags(pd.DataFrame([rule_kpis])).iloc[0])
+            timings["rule"] = time.perf_counter() - step
+            return raw, etd, inlens, rule_result, rule_kpis, flags
+
+        self._notify(progress, "rule analysis", 0.05)
+        rule_future = self._rule_branch.submit(rule_branch)
 
         self._notify(progress, "feature extraction", 0.30)
         step = time.perf_counter()
@@ -386,9 +396,12 @@ class InferencePipeline:
             tile_size=224,
             overlap=56,
             patch_size=self.patch_size,
-            device="cpu",
+            device=self.device,
         )
         prediction = probabilities.argmax(axis=0).astype(np.uint8)
+        dino_done = time.perf_counter()
+        raw, _etd, _inlens, rule_result, rule_kpis, flags = rule_future.result()
+        timings["waiting_for_rule"] = time.perf_counter() - dino_done
         if prediction.shape != raw.shape:
             raise ValueError(
                 f"Predicted mask shape {prediction.shape} does not match loaded sample shape {raw.shape}"
