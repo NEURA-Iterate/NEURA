@@ -200,27 +200,6 @@
   <p class="muted small">Values average the rule and DINO measurements where both exist; measurements are in pixels (the images carry no scale). Within 1 standard deviation of the baseline counts as normal.</p>
 </section>
 
-<section class="card">
-  <h2>Segmentation uncertainty for this sample</h2>
-  <p class="muted small">Each KPI is measured on two independent segmentations of the image (rule-based and DINO). If they disagree, or if moving the phase boundaries by a pixel or two changes the value a lot, that KPI is less certain for this sample.</p>
-  <div class="tscroll"><table>
-    <thead><tr><th>KPI</th><th class="num">Rule masks</th><th class="num">DINO masks</th><th class="num">Rule vs DINO</th><th class="num">Boundary shift</th><th>Certainty</th></tr></thead>
-    <tbody>
-      {#each segRows as s}
-        <tr>
-          <td>{s.label}</td>
-          <td class="num">{fmtKpi(s.rv, meta[s.k])}</td>
-          <td class="num">{fmtKpi(s.dv, meta[s.k])}</td>
-          <td class="num">{Number.isFinite(s.diff) ? `${s.diff.toFixed(0)}% apart` : '–'}</td>
-          <td class="num">{Number.isFinite(s.band) ? `±${s.band.toFixed(0)}%` : '–'}{#if Number.isFinite(s.lo) && Number.isFinite(s.hi)}<br /><small class="muted">{fmtKpi(s.lo, meta[s.k])}–{fmtKpi(s.hi, meta[s.k])}</small>{/if}</td>
-          <td><span class="seg seg-{s.level}">{s.level === 'small' ? 'reliable' : s.level === 'moderate' ? 'some doubt' : 'uncertain'}</span></td>
-        </tr>
-      {/each}
-    </tbody>
-  </table></div>
-  <p class="muted small">Reliable: both checks within 10%. Some doubt: 10–25%. Uncertain: over 25%.</p>
-</section>
-
 <div class="cols">
   <section class="card">
     <h2>Probabilities</h2>
@@ -372,7 +351,26 @@
 </section>
 
 <section class="card">
-  <h2>Masks next to a representative sample of each batch</h2>
+  <h2>Segmentation</h2>
+  <h3 class="sub">How certain the measurements are for this sample</h3>
+  <p class="muted small">Each KPI is measured on two independent segmentations of the image (rule-based and DINO). If they disagree, or if moving the phase boundaries by a pixel or two changes the value a lot, that KPI is less certain for this sample.</p>
+  <div class="tscroll"><table>
+    <thead><tr><th>KPI</th><th class="num">Rule masks</th><th class="num">DINO masks</th><th class="num">Rule vs DINO</th><th class="num">Boundary shift</th><th>Certainty</th></tr></thead>
+    <tbody>
+      {#each segRows as s}
+        <tr>
+          <td>{s.label}</td>
+          <td class="num">{fmtKpi(s.rv, meta[s.k])}</td>
+          <td class="num">{fmtKpi(s.dv, meta[s.k])}</td>
+          <td class="num">{Number.isFinite(s.diff) ? `${s.diff.toFixed(0)}% apart` : '–'}</td>
+          <td class="num">{Number.isFinite(s.band) ? `±${s.band.toFixed(0)}%` : '–'}{#if Number.isFinite(s.lo) && Number.isFinite(s.hi)}<br /><small class="muted">{fmtKpi(s.lo, meta[s.k])}–{fmtKpi(s.hi, meta[s.k])}</small>{/if}</td>
+          <td><span class="seg seg-{s.level}">{s.level === 'small' ? 'reliable' : s.level === 'moderate' ? 'some doubt' : 'uncertain'}</span></td>
+        </tr>
+      {/each}
+    </tbody>
+  </table></div>
+  <p class="muted small">Reliable: both checks within 10%. Some doubt: 10–25%. Uncertain: over 25%.</p>
+  <h3 class="sub">Masks next to a representative sample of each batch</h3>
   <div class="pairsel">
     {#each [['bse', 'BSE'], ['rule', 'Rule masks'], ['learned', 'DINO masks'], ['cracks', 'Graphite cracks']] as [k, l]}
       <button class:sel={panel === k} onclick={() => (panel = k as Panel)}>{l}</button>
@@ -412,6 +410,7 @@
   .qcline { font-size: 1.05rem; color: #1f2937; margin-top: 4px; }
   .qcwhy { text-align: left; display: inline-block; margin: 10px auto 0; color: #374151; font-size: 0.95rem; }
   .policy { max-width: 640px; margin: 10px auto 0; }
+  .sub { font-size: 1rem; margin: 18px 0 6px; }
   .seg { font-size: 0.8rem; font-weight: 700; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
   .seg-small { background: #e8f5ec; color: #1a7f37; }
   .seg-moderate { background: #fff4e0; color: #9a5b00; }
