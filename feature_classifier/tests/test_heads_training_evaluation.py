@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from types import SimpleNamespace
 
 import numpy as np
@@ -102,6 +103,56 @@ def test_holdout_image_split_is_deterministic_and_keeps_test_images_separate() -
             "Batch_1",
             "Batch_2",
         }
+
+
+def test_all_split_trains_without_validation_and_saves_last_epoch(tmp_path, monkeypatch) -> None:
+    samples = [
+        make_image_sample(2, image_id="sample-1", batch="Batch_1"),
+        make_image_sample(3, image_id="sample-2", batch="Batch_2"),
+        make_image_sample(4, image_id="sample-3", batch="Batch_3"),
+    ]
+    images = [SimpleNamespace(image_id=sample.image_id, batch=sample.batch) for sample in samples]
+    monkeypatch.setattr(train_module, "find_bse_images", lambda _path: images)
+    monkeypatch.setattr(train_module, "load_training_samples", lambda *_args, **_kwargs: samples)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "phaseseg.train",
+            "--images",
+            str(tmp_path / "images"),
+            "--features",
+            str(tmp_path / "features"),
+            "--labels",
+            "pseudo",
+            "--head",
+            "linear",
+            "--split",
+            "all",
+            "--epochs",
+            "2",
+            "--crop-size",
+            "56",
+            "--crops-per-image",
+            "1",
+            "--batch-size",
+            "1",
+            "--device",
+            "cpu",
+            "--out",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    train_module.main()
+
+    split = json.loads((tmp_path / "out" / "split.json").read_text())
+    checkpoint = torch.load(tmp_path / "out" / "model.pt", map_location="cpu", weights_only=False)
+    metrics = json.loads((tmp_path / "out" / "metrics.json").read_text())
+    assert split == {"train": ["sample-1", "sample-2", "sample-3"], "val": [], "test": []}
+    assert checkpoint["train_image_ids"] == split["train"]
+    assert checkpoint["validation_image_ids"] == checkpoint["test_image_ids"] == []
+    assert metrics["metrics"]["last_epoch"] == 2
 
 
 def test_pseudo_label_cache_is_uint8_and_separated_by_settings(
