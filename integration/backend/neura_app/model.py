@@ -19,7 +19,7 @@ SOURCE_KPIS = {
     "rule": ("frac_pore", "graphite_crack_density", "si_cv_w256"),
     "learned": ("frac_pore", "graphite_aspect_ratio_median", "si_cv_w256"),
 }
-SOURCE_LABELS = {"rule": "rule masks", "learned": "learned masks"}
+SOURCE_LABELS = {"rule": "rule masks", "learned": "DINO masks"}
 KPI_LABELS = {
     "frac_pore": ("Porosity", "%"),
     "graphite_crack_density": ("Graphite crack density", "crack px per 10⁴ graphite px"),
@@ -269,8 +269,6 @@ class DualSourceClassifier:
         unit = KPI_META[kpi]["unit"]
         if unit == "%":
             return f"{value * 100:.1f}%"
-        if unit:
-            return f"{value:.3g} {unit}"
         return f"{value:.3g}"
 
     def _explanations(self, contributions: list[dict], top: str, runner_up: str) -> list[str]:
@@ -290,10 +288,11 @@ class DualSourceClassifier:
                 batch: float(table.loc[table["batch"] == batch, kpi].median())
                 for batch in (favored, other)
             }
+            name = {batch: batch.replace("_", " ") for batch in (favored, other)}
             explanations.append(
-                f"{KPI_META[kpi]['label']} {display} ({SOURCE_LABELS[source]}) favours {favored} over "
-                f"{other}: typical {favored} is {self._display(kpi, medians[favored])}, "
-                f"{other} {self._display(kpi, medians[other])}."
+                f"{KPI_META[kpi]['label']} {display} ({SOURCE_LABELS[source]}) favours {name[favored]} over "
+                f"{name[other]}: typical {name[favored]} is {self._display(kpi, medians[favored])}, "
+                f"{name[other]} {self._display(kpi, medians[other])}."
             )
         return explanations
 
