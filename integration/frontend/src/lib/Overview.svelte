@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Overview, Source } from './types'
-  import { batchColor, pct, short, SOURCE_LABEL } from './format'
+  import { batchColor, fmtKpi, pct, short, SOURCE_LABEL } from './format'
   import Scatter from './Scatter.svelte'
 
   let { overview }: { overview: Overview } = $props()
@@ -24,6 +24,30 @@
   const perSample = $derived(
     [...v.per_sample].sort((a, b) => a.true.localeCompare(b.true) || a.image_id.localeCompare(b.image_id)),
   )
+  let pairA = $state('Batch_1')
+  let pairB = $state('Batch_2')
+  const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+  const pairRows = $derived.by(() => {
+    const kpis = [...new Set([...overview.classifiers.rule.kpis, ...overview.classifiers.learned.kpis])]
+    const rows = kpis.flatMap((k) => {
+      const srcs = (['rule', 'learned'] as const).filter((s) => overview.classifiers[s].kpis.includes(k))
+      const stat = (b: string) => {
+        const sts = srcs.map((s) => overview.batch_stats?.[s]?.[k]?.[b]).filter((x): x is NonNullable<typeof x> => !!x)
+        return sts.length ? { median: avg(sts.map((x) => x.median)), p25: avg(sts.map((x) => x.p25)), p75: avg(sts.map((x) => x.p75)) } : null
+      }
+      const a = stat(pairA), b = stat(pairB)
+      if (!a || !b) return []
+      const xs = [a.p25, a.p75, b.p25, b.p75]
+      const lo = Math.min(...xs), hi = Math.max(...xs), pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.05 || 1
+      const pos = (x: number) => ((x - (lo - pad)) / (hi - lo + 2 * pad)) * 100
+      const spread = (a.p75 - a.p25 + b.p75 - b.p25) / 2
+      const sep = Math.abs(a.median - b.median) / Math.max(spread, 1e-9)
+      const rel = b.median ? (a.median - b.median) / Math.abs(b.median) : 0
+      return [{ k, label: overview.kpi_meta[k]?.label ?? k, a, b, pos, sep, rel }]
+    })
+    const top = Math.max(1e-9, ...rows.map((r) => r.sep))
+    return rows.map((r) => ({ ...r, weight: r.sep / top })).sort((x, y) => y.sep - x.sep)
+  })
   const predOf = (s: (typeof perSample)[number]) =>
     classes.reduce((best, c) => ((s as any)[`P_${c}`] > (s as any)[`P_${best}`] ? c : best), classes[0])
 </script>
@@ -53,6 +77,7 @@
       (17 per batch). Batch 1 and 2 have 7 samples, so their samples are held out 2–3 times;
       "Samples correct" averages those repeats into one prediction per sample (31).
     </p>
+    <div class="tscroll">
     <table>
       <thead><tr><th>Classifier</th><th class="num">Correct</th>
         {#each classes as c}<th class="num">{short(c)} acc.</th>{/each}
@@ -69,6 +94,7 @@
         {/each}
       </tbody>
     </table>
+    </div>
     {#if v.note}<p class="muted">{v.note}</p>{/if}
 
     <div class="two">
@@ -136,6 +162,43 @@
     </div>
   </section>
 
+  <section class="card">
+    <h2>Compare two batches</h2>
+    <div class="pairsel">
+      <select bind:value={pairA}>{#each classes as c}<option value={c}>{c.replace('_', ' ')}</option>{/each}</select>
+      <span class="muted">vs</span>
+      <select bind:value={pairB}>{#each classes as c}<option value={c}>{c.replace('_', ' ')}</option>{/each}</select>
+    </div>
+    {#if pairA === pairB}
+      <p class="muted">Pick two different batches.</p>
+    {:else}
+      <div class="cmp">
+        {#each pairRows as r (r.k)}
+          <div class="crow">
+            <div class="chead"><span class="clab">{r.label}</span>
+              <span class="ctag" style="background:{batchColor(pairA)}1f; color:{batchColor(pairA)}">
+                {short(pairA)} {r.rel >= 0 ? 'higher' : 'lower'} by {pct(Math.abs(r.rel))}
+                <span class="cweight"><span style="width:{r.weight * 100}%; background:{batchColor(pairA)}"></span></span>
+              </span>
+            </div>
+            <div class="cline">
+              {#each [[pairA, r.a], [pairB, r.b]] as [b, st], i}
+                {@const s = st as { median: number; p25: number; p75: number }}
+                <div class="cband" style="left:{r.pos(s.p25)}%; width:{Math.max(r.pos(s.p75) - r.pos(s.p25), 0.8)}%; background:{batchColor(b as string)}; top:{3 + i * 11}px"></div>
+                <div class="cmed" style="left:{r.pos(s.median)}%; background:{batchColor(b as string)}; top:{1 + i * 11}px"></div>
+              {/each}
+            </div>
+            <div class="small">
+              <span style="color:{batchColor(pairA)}">{short(pairA)} typical {fmtKpi(r.a.median, overview.kpi_meta[r.k])}</span> ·
+              <span style="color:{batchColor(pairB)}">{short(pairB)} typical {fmtKpi(r.b.median, overview.kpi_meta[r.k])}</span>
+            </div>
+          </div>
+        {/each}
+      </div>
+      <p class="muted small">KPIs used by the classifiers, most different first (rule and DINO values averaged). Bands: middle 50% of each batch's training samples, tick: median. The small bar shows how clearly the KPI separates the two batches.</p>
+    {/if}
+  </section>
+
   {#if overview.figures?.length}
     <section class="card">
       <h2>Research figures</h2>
@@ -173,5 +236,18 @@
   .figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
   .figs a { display: grid; gap: 4px; color: inherit; text-decoration: none; font-size: 0.8rem; }
   .figs img { width: 100%; border: 1px solid #eee; border-radius: 4px; }
+  .pairsel { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .tscroll { overflow-x: auto; }
+  .cmp { display: grid; gap: 18px; max-width: 760px; }
+  .crow { display: grid; gap: 6px; }
+  .chead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .clab { font-weight: 500; }
+  .ctag { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .cweight { display: inline-block; width: 40px; height: 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.08); overflow: hidden; }
+  .cweight span { display: block; height: 100%; border-radius: 999px; }
+  .cline { position: relative; height: 24px; background: linear-gradient(#e3e6ea, #e3e6ea) 0 50% / 100% 2px no-repeat; }
+  .cband { position: absolute; height: 7px; border-radius: 999px; opacity: 0.45; }
+  .cmed { position: absolute; width: 3px; height: 11px; border-radius: 2px; transform: translateX(-1.5px); }
+  .small { font-size: 0.82rem; }
   @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
 </style>

@@ -10,18 +10,6 @@
   const meta = $derived(overview.kpi_meta)
   const pred = $derived(result.prediction)
 
-  // pairwise comparison
-  let pairA = $state<string>('')
-  let pairB = $state<string>('')
-  $effect(() => { pairA = result.prediction.predicted; pairB = result.prediction.runner_up })
-  const pairRows = $derived(
-    result.contributions
-      .map((c) => ({ ...c, d: (c.per_batch[pairA] ?? 0) - (c.per_batch[pairB] ?? 0) }))
-      .sort((a, b) => Math.abs(b.d) - Math.abs(a.d)),
-  )
-  const pairTotal = $derived(pairRows.reduce((s, r) => s + r.d, 0))
-  const maxAbs = (xs: number[]) => Math.max(1e-9, ...xs.map(Math.abs))
-  const pairMax = $derived(maxAbs(pairRows.map((r) => r.d)))
 
   // feature tables
   let featSource = $state<Source>('rule')
@@ -140,66 +128,52 @@
     <p class="muted small">Coloured band: middle 50% of {pred.predicted.replace('_', ' ')} training samples; thin line: its median; dot: this sample.</p>
   </section>
 
-  <section class="card">
-    <h2>KPIs</h2>
-    <div class="why">
-      {#each whyRows as r}
-        <div class="wrow">
-          <div class="whead">
-            <span class="wlab">{r.label}</span>
-            <span class="wval">{r.display}</span>
-          </div>
-          <div class="wline">
-            {#each r.batches as bt, i}
-              {#if bt.st}
-                <div class="wband" style="left:{r.pos(bt.st.p25)}%; width:{Math.max(r.pos(bt.st.p75) - r.pos(bt.st.p25), 0.8)}%; background:{batchColor(bt.b)}; top:{2 + i * 10}px"></div>
-                <div class="wmed" style="left:{r.pos(bt.st.median)}%; background:{batchColor(bt.b)}; top:{i * 10}px"></div>
-              {/if}
-            {/each}
-            <div class="wdot" style="left:{r.pos(r.value)}%"></div>
-          </div>
-          <div class="wfoot">
-            <span class="small">
-              {#each r.batches as bt, i}{#if bt.st}{i ? ' · ' : ''}<span style="color:{batchColor(bt.b)}">{short(bt.b)} typical {fmtKpi(bt.st.median, meta[r.kpi])}</span>{/if}{/each}
-            </span>
-            {#if r.best}
-              <span class="wfav" style="background:{batchColor(r.best)}1f; color:{batchColor(r.best)}">
-                favours {short(r.best)}
-                <span class="wweight"><span style="width:{r.weight * 100}%; background:{batchColor(r.best)}"></span></span>
+  <div class="colstack">
+    <section class="card">
+      <h2>KPIs</h2>
+      <div class="why">
+        {#each whyRows as r}
+          <div class="wrow">
+            <div class="whead">
+              <span class="wlab">{r.label}</span>
+              <span class="wval">{r.display}</span>
+            </div>
+            <div class="wline">
+              {#each r.batches as bt, i}
+                {#if bt.st}
+                  <div class="wband" style="left:{r.pos(bt.st.p25)}%; width:{Math.max(r.pos(bt.st.p75) - r.pos(bt.st.p25), 0.8)}%; background:{batchColor(bt.b)}; top:{2 + i * 10}px"></div>
+                  <div class="wmed" style="left:{r.pos(bt.st.median)}%; background:{batchColor(bt.b)}; top:{i * 10}px"></div>
+                {/if}
+              {/each}
+              <div class="wdot" style="left:{r.pos(r.value)}%"></div>
+            </div>
+            <div class="wfoot">
+              <span class="small">
+                {#each r.batches as bt, i}{#if bt.st}{i ? ' · ' : ''}<span style="color:{batchColor(bt.b)}">{short(bt.b)} typical {fmtKpi(bt.st.median, meta[r.kpi])}</span>{/if}{/each}
               </span>
-            {/if}
+              {#if r.best}
+                <span class="wfav" style="background:{batchColor(r.best)}1f; color:{batchColor(r.best)}">
+                  favours {short(r.best)}
+                  <span class="wweight"><span style="width:{r.weight * 100}%; background:{batchColor(r.best)}"></span></span>
+                </span>
+              {/if}
+            </div>
           </div>
-        </div>
+        {/each}
+      </div>
+      <p class="muted small">Black dot: this sample. Coloured bands: middle 50% of each batch's training samples, tick: its median. "Favours" names the batch this measurement fits best; the small bar shows how strongly it separates the batches.</p>
+    </section>
+  <section class="card">
+    <h2>Where the sample sits</h2>
+    <div class="charts">
+      {#each PRESETS as p}
+        <Scatter rows={overview.training} source={p.source} x={p.x} y={p.y} {meta} {classes} title={p.title}
+          point={{ x: sampleVal(p.source, p.x) ?? NaN, y: sampleVal(p.source, p.y) ?? NaN, label: 'this sample' }} />
       {/each}
     </div>
-    <p class="muted small">Black dot: this sample. Coloured bands: middle 50% of each batch's training samples, tick: its median. "Favours" names the batch this measurement fits best; the small bar shows how strongly it separates the batches.</p>
   </section>
-</div>
-
-<section class="card">
-  <h2>Compare two batches</h2>
-  <div class="pairsel">
-    <select bind:value={pairA}>{#each classes as c}<option value={c}>{c.replace('_', ' ')}</option>{/each}</select>
-    vs
-    <select bind:value={pairB}>{#each classes as c}<option value={c}>{c.replace('_', ' ')}</option>{/each}</select>
-    <span class="muted">
-      {#if pairA !== pairB}
-        P({short(pairA)}) / P({short(pairB)}) = {pct(pred.probabilities[pairA])} / {pct(pred.probabilities[pairB])}
-        ≈ e<sup>{pairTotal.toFixed(2)}</sup> = {Math.exp(pairTotal).toFixed(pairTotal > 4 ? 0 : 2)}×
-      {/if}
-    </span>
   </div>
-  {#if pairA !== pairB}
-    <div class="ev">
-      {#each pairRows as r}
-        <span class="lab">{r.label} <small>({r.source === 'rule' ? 'rule' : 'DINO'})</small></span>
-        <span class="val">{r.d >= 0 ? '+' : ''}{r.d.toFixed(2)}</span>
-        <div class="axis"><div class="bar" style="{r.d >= 0 ? 'left:50%' : 'right:50%'}; width:{(Math.abs(r.d) / pairMax) * 50}%; background:{batchColor(r.d >= 0 ? pairA : pairB)}"></div></div>
-      {/each}
-    </div>
-    <p class="muted small">Sum of the bars = log of the probability ratio. Uniform batch priors.</p>
-  {/if}
-</section>
+</div>
 
 <section class="card">
   <h2>Comparison with the baseline (Batch 3)</h2>
@@ -263,16 +237,6 @@
 </section>
 
 <section class="card">
-  <h2>Where the sample sits</h2>
-  <div class="charts">
-    {#each PRESETS as p}
-      <Scatter rows={overview.training} source={p.source} x={p.x} y={p.y} {meta} {classes} title={p.title}
-        point={{ x: sampleVal(p.source, p.x) ?? NaN, y: sampleVal(p.source, p.y) ?? NaN, label: 'this sample' }} />
-    {/each}
-  </div>
-</section>
-
-<section class="card">
   <h2>Masks next to a representative sample of each batch</h2>
   <div class="pairsel">
     {#each [['bse', 'BSE'], ['rule', 'Rule masks'], ['learned', 'DINO masks'], ['cracks', 'Graphite cracks']] as [k, l]}
@@ -311,6 +275,8 @@
   .conf .pill { font-size: 0.95rem; padding: 4px 12px; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .cols > * { min-width: 0; }
+  .colstack { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  .colstack .charts { grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); }
   .tscroll { overflow-x: auto; }
   .kpis { display: grid; gap: 14px; margin-top: 8px; }
   .krow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
@@ -341,11 +307,9 @@
   .wfav { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
   .wweight { display: inline-block; width: 40px; height: 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.08); overflow: hidden; }
   .wweight span { display: block; height: 100%; border-radius: 999px; }
-  .ev { display: grid; grid-template-columns: minmax(150px, 1.2fr) 70px 1.5fr; gap: 4px 8px; align-items: center; font-size: 0.82rem; }
-  .ev .val { text-align: right; font-variant-numeric: tabular-nums; }
-  .axis, .zaxis { position: relative; height: 12px; background: linear-gradient(#bbb, #bbb) 50% / 1px 100% no-repeat; }
+  .zaxis { position: relative; height: 12px; background: linear-gradient(#bbb, #bbb) 50% / 1px 100% no-repeat; }
   .zaxis { display: inline-block; width: 90px; vertical-align: middle; margin-right: 6px; }
-  .bar, .zbar { position: absolute; top: 1px; bottom: 1px; border-radius: 2px; }
+  .zbar { position: absolute; top: 1px; bottom: 1px; border-radius: 2px; }
   .zbar.typical { background: #9aa; } .zbar.higher { background: #c0504d; } .zbar.lower { background: #4f81bd; }
   .pairsel { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 0.88rem; }
   button.sel { background: #14213d; color: #fff; border-color: #14213d; }
@@ -356,6 +320,6 @@
   .vis figure { margin: 0; }
   .vis img { width: 100%; border: 1px solid #ddd; border-radius: 4px; background: #000; image-rendering: auto; }
   figcaption { font-size: 0.8rem; }
-  @media (max-width: 600px) { .ev { grid-template-columns: minmax(0, 1.2fr) 56px minmax(0, 1fr); } .big { font-size: 2.5rem; } }
+  @media (max-width: 600px) { .big { font-size: 2.5rem; } }
   @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } .vis.zoomed { grid-template-columns: 1fr 1fr; } }
 </style>
