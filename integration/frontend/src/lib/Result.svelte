@@ -22,7 +22,6 @@
   const pairTotal = $derived(pairRows.reduce((s, r) => s + r.d, 0))
   const maxAbs = (xs: number[]) => Math.max(1e-9, ...xs.map(Math.abs))
   const pairMax = $derived(maxAbs(pairRows.map((r) => r.d)))
-  const evMax = $derived(maxAbs(result.contributions.map((c) => c.evidence)))
 
   // feature tables
   let featSource = $state<Source>('rule')
@@ -64,15 +63,20 @@
       return [{ k, label: meta[k].label, value, status, pos, img: src ? { src, caption: v.caption } : null, ...st }]
     }),
   )
-  const whyRows = $derived(
-    result.contributions.map((c) => {
-      const batches = [pred.predicted, pred.runner_up].map((b) => ({ b, st: overview.batch_stats?.[c.source]?.[c.kpi]?.[b] }))
+  const whyRows = $derived.by(() => {
+    const rows = result.contributions.map((c) => {
+      const batches = classes.map((b) => ({ b, st: overview.batch_stats?.[c.source]?.[c.kpi]?.[b] }))
       const xs = [c.value, ...batches.flatMap((x) => (x.st ? [x.st.p25, x.st.p75, x.st.median] : []))].filter(Number.isFinite)
       const lo = Math.min(...xs), hi = Math.max(...xs), pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.05 || 1
       const pos = (x: number) => ((x - (lo - pad)) / (hi - lo + 2 * pad)) * 100
-      return { ...c, batches, pos, weight: Math.abs(c.evidence) / evMax }
-    }),
-  )
+      const ll = classes.map((b) => c.per_batch[b] ?? -Infinity)
+      const best = classes[ll.indexOf(Math.max(...ll))]
+      const spread = Math.max(...ll) - Math.min(...ll)
+      return { ...c, batches, pos, best, spread: Number.isFinite(spread) ? spread : 0 }
+    })
+    const top = Math.max(1e-9, ...rows.map((r) => r.spread))
+    return rows.map((r) => ({ ...r, weight: r.spread / top })).sort((a, b) => b.spread - a.spread)
+  })
   const flags = $derived(
     Array.isArray(result.trust_flags) ? result.trust_flags.filter(Boolean) : result.trust_flags ? String(result.trust_flags).split(/[;,\s]+/).filter(Boolean) : [],
   )
@@ -130,7 +134,7 @@
 
   <section class="card">
     <h2>Why</h2>
-    <p class="muted small">How this sample compares with typical {pred.predicted.replace('_', ' ')} and {pred.runner_up.replace('_', ' ')} samples, most decisive first.</p>
+    <p class="muted small">How this sample compares with typical samples of each batch, most decisive first.</p>
     <div class="why">
       {#each whyRows as r}
         <div class="wrow">
@@ -141,8 +145,8 @@
           <div class="wline">
             {#each r.batches as bt, i}
               {#if bt.st}
-                <div class="wband" style="left:{r.pos(bt.st.p25)}%; width:{Math.max(r.pos(bt.st.p75) - r.pos(bt.st.p25), 0.8)}%; background:{batchColor(bt.b)}; top:{i === 0 ? 2 : 13}px"></div>
-                <div class="wmed" style="left:{r.pos(bt.st.median)}%; background:{batchColor(bt.b)}; top:{i === 0 ? 0 : 11}px"></div>
+                <div class="wband" style="left:{r.pos(bt.st.p25)}%; width:{Math.max(r.pos(bt.st.p75) - r.pos(bt.st.p25), 0.8)}%; background:{batchColor(bt.b)}; top:{2 + i * 10}px"></div>
+                <div class="wmed" style="left:{r.pos(bt.st.median)}%; background:{batchColor(bt.b)}; top:{i * 10}px"></div>
               {/if}
             {/each}
             <div class="wdot" style="left:{r.pos(r.value)}%"></div>
@@ -151,17 +155,17 @@
             <span class="small">
               {#each r.batches as bt, i}{#if bt.st}{i ? ' · ' : ''}<span style="color:{batchColor(bt.b)}">{short(bt.b)} typical {fmtKpi(bt.st.median, meta[r.kpi])}</span>{/if}{/each}
             </span>
-            {#if r.favours}
-              <span class="wfav" style="background:{batchColor(r.favours)}1f; color:{batchColor(r.favours)}">
-                favours {short(r.favours)}
-                <span class="wweight"><span style="width:{r.weight * 100}%; background:{batchColor(r.favours)}"></span></span>
+            {#if r.best}
+              <span class="wfav" style="background:{batchColor(r.best)}1f; color:{batchColor(r.best)}">
+                favours {short(r.best)}
+                <span class="wweight"><span style="width:{r.weight * 100}%; background:{batchColor(r.best)}"></span></span>
               </span>
             {/if}
           </div>
         </div>
       {/each}
     </div>
-    <p class="muted small">Black dot: this sample. Coloured bands: middle 50% of each batch's training samples, tick: its median. The small bar shows how much each measurement counts towards the result.</p>
+    <p class="muted small">Black dot: this sample. Coloured bands: middle 50% of each batch's training samples, tick: its median. "Favours" names the batch this measurement fits best; the small bar shows how strongly it separates the batches.</p>
   </section>
 </div>
 
@@ -322,7 +326,7 @@
   .whead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
   .wlab { font-weight: 500; }
   .wval { font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .wline { position: relative; height: 22px; background: linear-gradient(#e3e6ea, #e3e6ea) 0 50% / 100% 2px no-repeat; }
+  .wline { position: relative; height: 32px; background: linear-gradient(#e3e6ea, #e3e6ea) 0 50% / 100% 2px no-repeat; }
   .wband { position: absolute; height: 7px; border-radius: 999px; opacity: 0.4; }
   .wmed { position: absolute; width: 3px; height: 11px; border-radius: 2px; transform: translateX(-1.5px); }
   .wdot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: #1d1d1f; border: 2px solid #fff; box-shadow: 0 0 0 1px #1d1d1f; transform: translate(-50%, -50%); }
