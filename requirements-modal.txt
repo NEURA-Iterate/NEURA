@@ -1,0 +1,10 @@
+numpy==2.2.6
+scipy==1.15.3
+pillow==11.3.0
+pandas==2.3.2
+tifffile==2025.5.10
+torch==2.8.0
+torchvision==0.23.0
+huggingface_hub==0.30.2
+scikit-learn==1.6.1
+matplotlib==3.10.1

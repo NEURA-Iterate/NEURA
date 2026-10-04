@@ -17,6 +17,9 @@ BSE + ETD/SE + Inlens (one sample)
  ├─ Classifiers     bayesian_kpi_classifier   Bayesian Student-t on 3 KPIs per branch → P_rule, P_learned
  ├─ Combine                                   P ∝ sqrt(P_rule × P_learned)
  └─ App             integration               FastAPI + Svelte: probabilities, ranges, reasons, baseline QC, history
+
+Separate end-to-end CNN (not used by the app):
+ 512 px normalised tiles → MicroNet ResNet-50 (SimSiam-adapted, fine-tuned) → P(batch) per tile    micronet_cls/
 ```
 
 ## Data
@@ -128,7 +131,34 @@ predictions. KPI subset selection happens inside each round.
 **Things that did not help:** per-KPI weights, two-stage classifiers, LDA and tile-level classifiers all overfit. Details in
 [`experiments/research/README.md`](bayesian_kpi_classifier/experiments/research/README.md).
 
-## 5. App (`integration/`)
+## 5. CNN classifier: MicroNet ResNet-50 (`micronet_cls/`, `modal_app.py`)
+
+A separate image classifier trained directly on tiles, without masks or KPIs. Details and all results are in
+[`micronet_cls/README.md`](micronet_cls/README.md).
+
+- **Input:** 512 × 512 tiles from `prepare_dataset.py`. Each tile is one detector image (BSE, ETD or Inlens), repeated to
+  3 channels; V2 adds ImageNet normalisation. The 4 samples with SE instead of ETD are excluded, leaving 27.
+- **Architecture:** `Encoder`, a ResNet-50 trunk (`conv1` → `layer1–4` → global average pool, giving 2048-d), followed by
+  `Classifier`, a single `Linear(2048, 3)`. It starts from NASA MicroNet weights
+  (`jstuckner/microscopy-resnet50-micronet`), pretrained on microscopy images.
+- **Stage A:** SimSiam self-supervised adaptation on Batch 3 train tiles only.
+- **Stage B:** a 3-way classifier on Batch 1/2 plus Batch 3 rehearsal. The encoder is frozen during warmup, then partly
+  (V1) or fully (V2) unfrozen. BatchNorm statistics stay frozen throughout.
+- **Split:** group-isolated, seed 42: 16 train / 5 val / 6 test samples. Model selection uses val only.
+- **Training:** on Modal GPUs (L4 for V1, B200 for V2).
+- **Locked test result (6 samples):** best accuracy 0.67 (V1, MicroNet init). **Batch 2 recall is 0 for every model**, and
+  no model is reliably better than always predicting Batch 3 (accuracy 0.50). Softmax outputs aren't calibrated.
+- **Earlier CNN test** (branch `devin/1791042532-encoder-embeddings`, not merged): fine-tuning an ImageNet ResNet-18 on
+  augmented tiles got 10/14 on B1 vs B2. Frozen ResNet-50 and DINOv2 embeddings stayed within the range of shuffled labels.
+- **Takeaway:** on 31 samples, end-to-end CNNs don't beat the KPI classifier, which is why the app uses the
+  mask → KPI → Bayesian route.
+
+```bash
+PYTHONUTF8=1 modal run --detach modal_app.py::pipeline --run-id RUN_ID [--tag v2 --gpu B200]
+python -m pytest -q tests
+```
+
+## 6. App (`integration/`)
 
 - **Backend:** `integration/backend/neura_app`, FastAPI.
   - `pipeline.py` runs the rule branch and the DINO branch in parallel, renders the masks, cracks and KPI explanation images.
@@ -158,6 +188,7 @@ predictions. KPI subset selection happens inside each round.
 | `normalize.py`, `prepare_dataset.py` | graphite-anchored normalisation + 512 px tile export |
 | `anode_microstructure_qc/` | rule segmentation, KPIs, uncertainty, QC report (`anode-qc` CLI) |
 | `feature_classifier/` | DINOv2 feature cache, FusionHead/linear decoders, training/eval, Modal app |
+| `micronet_cls/`, `modal_app.py`, `tests/` | MicroNet ResNet-50 CNN tile classifier on Modal (two-stage training, evaluation, predict) |
 | `bayesian_kpi_classifier/` | `neura_uq` classifier, CV experiments, learned-mask KPIs, research |
 | `integration/` | backend, frontend, artifacts (`fusion_holdout25.pt`, KPI tables), test runs, HF deploy |
 | `CLASSIFIER.md` | one-page classifier summary |
