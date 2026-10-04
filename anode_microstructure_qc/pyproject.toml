@@ -30,6 +30,9 @@ anode-qc = "anode_qc.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+anode_qc = ["reference/*.csv"]
+
 [tool.ruff]
 line-length = 110
 target-version = "py310"
