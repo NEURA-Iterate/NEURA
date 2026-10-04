@@ -17,17 +17,17 @@
         <div class="fill" style="width:{p * 100}%; background:{batchColor(c)}"></div>
         {#if iv}
           <div class="ci" style="left:{iv[0] * 100}%; width:{Math.max((iv[1] - iv[0]) * 100, 0.4)}%"
-            title="90% bootstrap interval {pct(iv[0])}–{pct(iv[1])}"></div>
+            title="Uncertainty: {pct(iv[0])}–{pct(iv[1])}"></div>
         {/if}
       </div>
-      <span class="val">{pct(p)}{#if iv && !compact}<small> [{pct(iv[0])}–{pct(iv[1])}]</small>{/if}</span>
+      <span class="val">{pct(p)}{#if iv && !compact}<small> ± {pct((iv[1] - iv[0]) / 2)}</small>{/if}</span>
     </div>
   {/each}
 </div>
 
 <style>
   .bars { display: grid; gap: 6px; }
-  .row { display: grid; grid-template-columns: 72px 1fr 130px; align-items: center; gap: 8px; }
+  .row { display: grid; grid-template-columns: 72px 1fr 110px; align-items: center; gap: 8px; }
   .compact .row { grid-template-columns: 26px 1fr 40px; gap: 5px; }
   .name { font-size: 0.85rem; }
   .track { position: relative; height: 18px; background: #eee; border-radius: 3px; overflow: hidden; }

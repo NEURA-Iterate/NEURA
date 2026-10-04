@@ -44,6 +44,19 @@
     { source: 'learned', x: 'frac_pore', y: 'graphite_aspect_ratio_median', title: 'Porosity vs graphite shape (DINO)' },
     { source: 'learned', x: 'si_cv_w256', y: 'graphite_aspect_ratio_median', title: 'Si heterogeneity vs graphite shape (DINO)' },
   ]
+  const coreKpis = $derived(
+    overview.classifiers.rule.kpis.flatMap((k) => {
+      const st = overview.batch_stats?.rule?.[k]?.[pred.predicted]
+      if (!st || !meta[k]) return []
+      const value = sampleVal('rule', k)
+      const all = Object.values(overview.batch_stats.rule[k]).flatMap((b) => [b.p25, b.p75])
+      if (value !== undefined && Number.isFinite(value)) all.push(value)
+      const lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * 0.1 || 1
+      const pos = (x: number) => ((x - (lo - pad)) / (hi - lo + 2 * pad)) * 100
+      const status = value === undefined || !Number.isFinite(value) ? 'na' : value < st.p25 ? 'below' : value > st.p75 ? 'above' : 'within'
+      return [{ k, label: meta[k].label, value, status, pos, ...st }]
+    }),
+  )
   const flags = $derived(
     Array.isArray(result.trust_flags) ? result.trust_flags.filter(Boolean) : result.trust_flags ? String(result.trust_flags).split(/[;,\s]+/).filter(Boolean) : [],
   )
@@ -74,17 +87,23 @@
   <section class="card">
     <h2>Batch probabilities</h2>
     <ProbBars {classes} probabilities={pred.probabilities} interval={pred.interval} />
-    <p class="muted">Black whiskers: 90% range when the classifiers are refitted on 200 bootstrap resamples of the 31 training samples (how much the answer depends on which reference samples we happen to have). Not a Bayesian credible interval.</p>
-    <div class="sub">
-      {#each ['rule', 'learned'] as const as s}
-        <div>
-          <h3>{SOURCE_LABEL[s]} classifier</h3>
-          <ProbBars {classes} probabilities={result.classifiers[s].probabilities} interval={result.classifiers[s].interval} compact />
-          <div class="muted small">KPIs: {Object.keys(result.classifiers[s].evidence).map((k) => meta[k]?.label ?? k).join(', ')}</div>
+    <p class="muted small">± is the uncertainty: how far each probability could move with a different set of reference samples (shown by the black whiskers).</p>
+    <h3>Key measurements vs {pred.predicted.replace('_', ' ')}</h3>
+    <div class="kpis">
+      {#each coreKpis as r}
+        <div class="krow">
+          <div class="klab">{r.label}</div>
+          <div class="kval"><b>{fmtKpi(r.value, meta[r.k])}</b> <span class="kstat {r.status}">{r.status === 'within' ? 'typical' : r.status === 'above' ? 'above typical' : r.status === 'below' ? 'below typical' : ''}</span></div>
+          <div class="krange">
+            <div class="band" style="left:{r.pos(r.p25)}%; width:{r.pos(r.p75) - r.pos(r.p25)}%; background:{batchColor(pred.predicted)}"></div>
+            <div class="med" style="left:{r.pos(r.median)}%"></div>
+            {#if r.value !== undefined}<div class="dot" style="left:{r.pos(r.value)}%"></div>{/if}
+          </div>
+          <div class="muted small ktyp">{pred.predicted.replace('_', ' ')} typical: {fmtKpi(r.p25, meta[r.k])} – {fmtKpi(r.p75, meta[r.k])}</div>
         </div>
       {/each}
     </div>
-    <p class="muted">Final = √(rule × DINO), renormalised.</p>
+    <p class="muted small">Coloured band: middle 50% of {pred.predicted.replace('_', ' ')} training samples; thin line: its median; dot: this sample.</p>
   </section>
 
   <section class="card">
@@ -238,9 +257,20 @@
   .pctv { font-size: 1.6rem; font-weight: 600; }
   .conf .pill { font-size: 0.95rem; padding: 4px 12px; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .cols > *, .sub > * { min-width: 0; }
+  .cols > * { min-width: 0; }
   .tscroll { overflow-x: auto; }
-  .sub { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .kpis { display: grid; gap: 14px; margin-top: 8px; }
+  .krow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
+  .klab { font-weight: 500; }
+  .kval { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .krange { grid-column: 1 / -1; position: relative; height: 12px; background: #eef0f3; border-radius: 999px; }
+  .band { position: absolute; top: 0; bottom: 0; opacity: 0.35; border-radius: 999px; }
+  .med { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #555; transform: translateX(-1px); }
+  .dot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: #1d1d1f; border: 2px solid #fff; box-shadow: 0 0 0 1px #1d1d1f; transform: translate(-50%, -50%); }
+  .ktyp { grid-column: 1 / -1; }
+  .kstat { font-size: 0.78rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-left: 4px; }
+  .kstat.within { background: #dff3e4; color: #1d6b33; }
+  .kstat.above, .kstat.below { background: #fff1d6; color: #8a5a00; }
   .small { font-size: 0.78rem; }
   .expl { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 4px; }
   .ev { display: grid; grid-template-columns: minmax(150px, 1.2fr) 70px 1.5fr; gap: 4px 8px; align-items: center; font-size: 0.82rem; }
@@ -259,5 +289,5 @@
   .vis img { width: 100%; border: 1px solid #ddd; border-radius: 4px; background: #000; image-rendering: auto; }
   figcaption { font-size: 0.8rem; }
   @media (max-width: 600px) { .ev { grid-template-columns: minmax(0, 1.2fr) 56px minmax(0, 1fr); } .big { font-size: 2.5rem; } }
-  @media (max-width: 1000px) { .cols, .sub { grid-template-columns: 1fr; } .vis.zoomed { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } .vis.zoomed { grid-template-columns: 1fr 1fr; } }
 </style>
