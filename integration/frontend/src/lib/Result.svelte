@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Overview, Result, Source, Images } from './types'
-  import { batchColor, flagText, fmtKpi, pct, short, SOURCE_LABEL } from './format'
+  import { batchColor, batchName, flagText, fmtKpi, pct, short, SOURCE_LABEL } from './format'
   import ProbBars from './ProbBars.svelte'
   import Scatter from './Scatter.svelte'
   import Legend from './Legend.svelte'
@@ -87,6 +87,46 @@
   const flags = $derived(
     Array.isArray(result.trust_flags) ? result.trust_flags.filter(Boolean) : result.trust_flags ? String(result.trust_flags).split(/[;,\s]+/).filter(Boolean) : [],
   )
+
+  // QC decision against the approved baseline (Batch 3). Thresholds are a policy choice, not fitted.
+  const ACCEPT_AT = 0.7, REJECT_AT = 0.3
+  const qc = $derived.by(() => {
+    const p3 = pred.probabilities.Batch_3 ?? 0
+    const [lo3, hi3] = pred.interval?.Batch_3 ?? [p3, p3]
+    const closest = pred.predicted === 'Batch_3' ? pred.runner_up : pred.predicted
+    const reasons: string[] = []
+    if (pred.outlier) reasons.push('Its measurements are unusual for every reference batch, so this may be a new kind of variation.')
+    if (flags.length) reasons.push('Image-quality warnings reduce how far the measurements can be trusted.')
+    if (!pred.outlier && p3 >= ACCEPT_AT && !flags.length && lo3 >= 0.5)
+      return { kind: 'accept', word: 'Accept', line: `Consistent with the approved baseline: ${pct(p3)} probability it matches Batch 3.`, reasons }
+    if (!pred.outlier && p3 <= REJECT_AT && hi3 <= 0.5)
+      return { kind: 'reject', word: 'Reject', line: `Changed from the baseline: only ${pct(p3)} probability it matches Batch 3. It most resembles ${batchName(closest)}, a known type of variation.`, reasons }
+    if (p3 > REJECT_AT && p3 < ACCEPT_AT) reasons.push(`The probability of matching the baseline (${pct(p3)}) is between the accept (${pct(ACCEPT_AT)}) and reject (${pct(REJECT_AT)}) limits.`)
+    if ((p3 >= ACCEPT_AT && lo3 < 0.5) || (p3 <= REJECT_AT && hi3 > 0.5)) reasons.push(`The uncertainty is wide: the baseline probability could plausibly be anywhere from ${pct(lo3)} to ${pct(hi3)}.`)
+    return { kind: 'investigate', word: 'Investigate', line: 'Not conclusive. A materials expert should review this sample before a decision is made.', reasons }
+  })
+
+  const KPI_WHY: Record<string, string> = {
+    frac_pore: 'Pore space affects electrolyte access and electrode density.',
+    graphite_crack_density: 'Cracks inside graphite can indicate mechanical damage during processing, e.g. calendering.',
+    si_cv_w256: 'Uneven Si distribution can create local swelling hot-spots during cycling.',
+    graphite_aspect_ratio_median: 'Graphite particle shape reflects the supplied powder and how it was processed.',
+  }
+  const drivers = $derived.by(() => {
+    const groups = new Map<string, typeof result.baseline.kpis>()
+    for (const b of result.baseline.kpis.filter(isUsed)) groups.set(b.kpi, [...(groups.get(b.kpi) ?? []), b])
+    const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+    return [...groups.entries()]
+      .map(([kpi, bs]) => {
+        const zs = bs.map((b) => b.z).filter((z): z is number => z !== null && Number.isFinite(z))
+        const z = zs.length ? avg(zs) : 0
+        const value = avg(bs.map((b) => b.value)), median = avg(bs.map((b) => b.median))
+        const rel = median ? ((value - median) / Math.abs(median)) * 100 : 0
+        const dir = Math.abs(z) < 1 ? 'typical' : z > 0 ? 'higher' : 'lower'
+        return { kpi, label: bs[0].label, z, value, median, rel, dir, why: KPI_WHY[kpi] ?? '' }
+      })
+      .sort((a, b) => Math.abs(b.z) - Math.abs(a.z))
+  })
 </script>
 
 <section class="card head">
@@ -97,10 +137,17 @@
         {result.known_batch === pred.predicted ? '✓ matches' : '✗ differs'} (training sample, so this is an in-sample check)</div>
     {/if}
   </div>
+  <div class="qc qc-{qc.kind}">
+    <div class="muted">QC decision vs the approved baseline</div>
+    <div class="qcword">{qc.word}</div>
+    <div class="qcline">{qc.line}</div>
+    {#if qc.reasons.length}<ul class="qcwhy">{#each qc.reasons as r}<li>{r}</li>{/each}</ul>{/if}
+  </div>
   <div class="verdict">
-    <div class="muted">Most likely</div>
-    <div class="big" style="color:{batchColor(pred.predicted)}">{pred.predicted.replace('_', ' ')}</div>
+    <div class="muted">Closest match</div>
+    <div class="big" style="color:{batchColor(pred.predicted)}">{batchName(pred.predicted)}</div>
     <div class="conf"><span class="pctv">{pct(pred.probabilities[pred.predicted])}</span> <span class="pill tier-{pred.tier}">{pred.tier === 'review' ? 'needs review' : `${pred.tier} confidence`}</span></div>
+    <div class="muted small policy">Accept if P(baseline) ≥ {pct(ACCEPT_AT)} and its uncertainty range stays above 50%; reject if ≤ {pct(REJECT_AT)} and it stays below 50%; otherwise investigate. These limits are a policy choice for the QC team, not fitted to data.</div>
   </div>
   <div class="flags">
     {#if pred.outlier}<div class="warn"><b>Unusual sample:</b> its KPIs are atypical for every known batch (typicality p &lt; 0.01). It may belong to none of them.</div>{/if}
@@ -108,6 +155,27 @@
     {#each flags as f}{@const m = flagText(f)}<div class="warn"><b>{m.title}:</b> {m.body}</div>{/each}
     {#each result.warnings as w}<div class="warn">{w}</div>{/each}
   </div>
+</section>
+
+<section class="card">
+  <h2>What's different from the baseline</h2>
+  <ul class="drivers">
+    {#each drivers as d}
+      <li class="drv-{d.dir}">
+        <span class="dtag">{d.dir === 'typical' ? 'within baseline' : d.dir === 'higher' ? '▲ higher' : '▼ lower'}</span>
+        <div>
+          <b>{d.label}</b>
+          {#if d.dir === 'typical'}
+            is within the normal baseline range ({fmtKpi(d.value, meta[d.kpi])} vs baseline median {fmtKpi(d.median, meta[d.kpi])}).
+          {:else}
+            is {Math.abs(d.rel).toFixed(0)}% {d.dir} than the baseline median ({fmtKpi(d.value, meta[d.kpi])} vs {fmtKpi(d.median, meta[d.kpi])}; {Math.abs(d.z).toFixed(1)} standard deviations).
+          {/if}
+          {#if d.why}<div class="muted small">{d.why}</div>{/if}
+        </div>
+      </li>
+    {/each}
+  </ul>
+  <p class="muted small">Values average the rule and DINO measurements where both exist; measurements are in pixels (the images carry no scale). Within 1 standard deviation of the baseline counts as normal.</p>
 </section>
 
 <div class="cols">
@@ -293,6 +361,20 @@
   .flags { display: grid; gap: 6px; }
   .flags:empty { display: none; }
   .verdict { text-align: center; padding: 8px 0 12px; }
+  .qc { text-align: center; border-radius: 16px; padding: 18px 20px; }
+  .qc-accept { background: #e8f5ec; color: #1a7f37; }
+  .qc-investigate { background: #fff4e0; color: #9a5b00; }
+  .qc-reject { background: #fdecec; color: #c62828; }
+  .qcword { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.02em; line-height: 1.15; }
+  .qcline { font-size: 1.05rem; color: #1f2937; margin-top: 4px; }
+  .qcwhy { text-align: left; display: inline-block; margin: 10px auto 0; color: #374151; font-size: 0.95rem; }
+  .policy { max-width: 640px; margin: 10px auto 0; }
+  .drivers { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .drivers li { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: start; }
+  .dtag { font-size: 0.85rem; font-weight: 700; border-radius: 999px; padding: 4px 10px; text-align: center; background: #eef0f3; color: #4b5563; }
+  .drv-higher .dtag, .drv-lower .dtag { background: #fdecec; color: #c62828; }
+  .drv-typical .dtag { background: #e8f5ec; color: #1a7f37; }
+  @media (max-width: 600px) { .drivers li { grid-template-columns: 1fr; } .qcword { font-size: 2rem; } }
   .big { font-size: 3rem; font-weight: 750; line-height: 1.1; margin: 4px 0 8px; letter-spacing: -0.01em; }
   .conf { display: inline-flex; align-items: center; gap: 10px; }
   .pctv { font-size: 1.6rem; font-weight: 600; }

@@ -39,3 +39,10 @@ const FLAG_TEXT: Record<string, { title: string; body: string }> = {
 }
 export const flagText = (f: string) =>
   FLAG_TEXT[f] ?? { title: 'Image-quality flag', body: f.replace(/_/g, ' ') }
+
+export const BATCH_NAME: Record<string, string> = {
+  Batch_3: 'Baseline (Batch 3)',
+  Batch_1: 'Variant A (Batch 1)',
+  Batch_2: 'Variant B (Batch 2)',
+}
+export const batchName = (b: string) => BATCH_NAME[b] ?? b.replace('_', ' ')
