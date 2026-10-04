@@ -1,5 +1,9 @@
 # NEURA: SEM anode sample → batch classifier
 
+**Demo video:** https://www.youtube.com/watch?v=MZ5414D2tL8
+
+[![NEURA demo](https://img.youtube.com/vi/MZ5414D2tL8/hqdefault.jpg)](https://www.youtube.com/watch?v=MZ5414D2tL8)
+
 Given one **sample** (one field of view imaged by three detectors, **BSE**, **ETD/SE** and **Inlens**), NEURA returns
 P(Batch 1), P(Batch 2), P(Batch 3) with uncertainty ranges, a QC decision against **Batch 3 (the baseline)**, and the
 physical reasons behind the call. Each sample is Si/graphite anode material; the three images of a sample are always used
