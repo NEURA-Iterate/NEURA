@@ -64,15 +64,23 @@
     }),
   )
   const whyRows = $derived.by(() => {
-    const rows = result.contributions.map((c) => {
-      const batches = classes.map((b) => ({ b, st: overview.batch_stats?.[c.source]?.[c.kpi]?.[b] }))
-      const xs = [c.value, ...batches.flatMap((x) => (x.st ? [x.st.p25, x.st.p75, x.st.median] : []))].filter(Number.isFinite)
+    const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+    const groups = new Map<string, typeof result.contributions>()
+    for (const c of result.contributions) groups.set(c.kpi, [...(groups.get(c.kpi) ?? []), c])
+    const rows = [...groups.entries()].map(([kpi, cs]) => {
+      const value = avg(cs.map((c) => c.value))
+      const batches = classes.map((b) => {
+        const sts = cs.map((c) => overview.batch_stats?.[c.source]?.[kpi]?.[b]).filter((x): x is NonNullable<typeof x> => !!x)
+        const st = sts.length ? { median: avg(sts.map((x) => x.median)), p25: avg(sts.map((x) => x.p25)), p75: avg(sts.map((x) => x.p75)) } : undefined
+        return { b, st }
+      })
+      const xs = [value, ...batches.flatMap((x) => (x.st ? [x.st.p25, x.st.p75, x.st.median] : []))].filter(Number.isFinite)
       const lo = Math.min(...xs), hi = Math.max(...xs), pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.05 || 1
       const pos = (x: number) => ((x - (lo - pad)) / (hi - lo + 2 * pad)) * 100
-      const ll = classes.map((b) => c.per_batch[b] ?? -Infinity)
+      const ll = classes.map((b) => cs.reduce((t, c) => t + (c.per_batch[b] ?? -Infinity), 0))
       const best = classes[ll.indexOf(Math.max(...ll))]
       const spread = Math.max(...ll) - Math.min(...ll)
-      return { ...c, batches, pos, best, spread: Number.isFinite(spread) ? spread : 0 }
+      return { kpi, label: cs[0].label, value, display: fmtKpi(value, meta[kpi]), batches, pos, best, spread: Number.isFinite(spread) ? spread : 0 }
     })
     const top = Math.max(1e-9, ...rows.map((r) => r.spread))
     return rows.map((r) => ({ ...r, weight: r.spread / top })).sort((a, b) => b.spread - a.spread)
@@ -105,10 +113,10 @@
 
 <div class="cols">
   <section class="card">
-    <h2>Batch probabilities</h2>
+    <h2>Probabilities</h2>
     <ProbBars {classes} probabilities={pred.probabilities} interval={pred.interval} />
     <p class="muted small">± is the uncertainty: how far each probability could move with a different set of reference samples (shown by the black whiskers).</p>
-    <h3>Key measurements vs {pred.predicted.replace('_', ' ')}</h3>
+    <h3>Key measurements</h3>
     <div class="kpis">
       {#each coreKpis as r}
         <div class="krow">
@@ -133,13 +141,12 @@
   </section>
 
   <section class="card">
-    <h2>Why</h2>
-    <p class="muted small">How this sample compares with typical samples of each batch, most decisive first.</p>
+    <h2>KPIs</h2>
     <div class="why">
       {#each whyRows as r}
         <div class="wrow">
           <div class="whead">
-            <span class="wlab">{r.label} <small class="muted">({r.source === 'rule' ? 'rule' : 'DINO'})</small></span>
+            <span class="wlab">{r.label}</span>
             <span class="wval">{r.display}</span>
           </div>
           <div class="wline">
