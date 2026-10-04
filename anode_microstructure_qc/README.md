@@ -23,6 +23,41 @@ setting and dominates run time); `--config my.yaml` overrides any value in
 [`configs/default.yaml`](configs/default.yaml) (unspecified values keep their defaults). Set
 `kpis.pixel_size_um` once the pixel size is known: all sizes switch from px to µm and counts to per-mm².
 
+## QC assessment: image in, answer out
+
+```bash
+pip install -e ./bayesian_kpi_classifier -e "./anode_microstructure_qc[dev]"   # from the repo root
+anode-qc assess path/to/img_xxx_BSE.tif [more files or folders] --out assessment
+```
+
+ETD/SE and Inlens siblings (`img_xxx_ETD.tif`, `img_xxx_Inlens.tif`) are used when present. For every sample it
+writes `assessment/<id>.html` (self-contained report with overlay), `<id>.json`, and one row in `summary.csv`:
+
+- **Batch call:** always one of Batch_1 / Batch_2 / Batch_3, with probabilities, from the `neura_uq` Bayesian
+  Student-t classifier (diagonal covariance) on three fixed decision KPIs:
+  porosity (`frac_pore`), graphite crack density (`graphite_crack_density`) and Si spread unevenness
+  (`si_cv_w256`).
+- **Against the Batch_3 baseline** (what the supplier promised): each KPI's value, baseline median and 5–95 %
+  range, z-score, the batch medians and what the shift means physically (e.g. lower porosity = denser packing).
+- **Verdict:** ACCEPT (matches the baseline on every KPI, no image-quality flags), REJECT (clearly not the
+  baseline), INVESTIGATE (mixed evidence). Batch_1/2 are not necessarily defective; REJECT means "not what was
+  promised".
+- **Uncertainty:** the decision KPIs are recomputed on four perturbed label maps and that segmentation spread is
+  propagated into the probabilities; the report shows whether the call changes across those variants,
+  typicality p-values per batch (atypical for all = possible new batch, still assigned to the nearest), the
+  leave-one-image-out reliability of the classifier, and image-quality flags (low Si contrast, charging,
+  streaks).
+- **Context KPIs** (Si fraction, Si size, graphite aspect ratio, binder fraction) are shown but never used for
+  the decision; binder is tagged as having no ground truth.
+
+Why these three KPIs: they separate the batches, agree between rule-based and DINOv2 masks (ρ ≈ 0.96–0.97) and do
+not track microscope settings. Porosity and graphite cracking separate the baseline from the drifted batches;
+Si spread separates Batch_1 from Batch_2. Adding DINOv2 masks, per-object geometry or more KPIs did not improve
+held-out accuracy on the 31 labelled images.
+
+The bundled reference (`src/anode_qc/reference/reference_kpis.csv`, KPI values only, no images) is rebuilt with
+`anode-qc build-reference --data data`.
+
 ## Algorithm
 
 1. **Load** (`data.py`): channel 0 of the TIFF (grey stored as 3 identical channels); a 2 px border is cropped

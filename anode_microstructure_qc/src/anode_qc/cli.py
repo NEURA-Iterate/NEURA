@@ -1,4 +1,4 @@
-"""Command-line entry point: ``anode-qc download | run | report``."""
+"""Command-line entry point: ``anode-qc assess | build-reference | download | run | report``."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import pandas as pd
 import yaml
 from PIL import Image
 
+from . import assess as qa
 from .config import Config
 from .data import BSEImage, download_dataset, find_bse_images, load_bse
 from .kpis import compute_kpis, kpis_from_labels
@@ -146,9 +147,65 @@ def run(
     print(f"Report: {build_report(out_dir)}")
 
 
+def _measure_all(images: list[BSEImage], cfg: Config, workers: int) -> list[dict]:
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        return list(ex.map(qa.measure, images, [cfg] * len(images)))
+
+
+def assess_cmd(paths: list[Path], out_dir: Path, cfg: Config, workers: int, reference: Path | None) -> None:
+    images = qa.collect_images(paths)
+    if not images:
+        raise SystemExit("No *_BSE.tif files found")
+    rows = []
+    for m in _measure_all(images, cfg, workers):
+        a = qa.assess(m, reference)
+        path = qa.write_outputs(a, out_dir)
+        rows.append(qa.summary_row(a))
+        print(f"\n== {a.image_id}: {a.verdict} | {a.batch} ({a.confidence}) | report {path}")
+        for line in a.explanation:
+            print(f"  - {line}")
+    pd.DataFrame(rows).to_csv(out_dir / "summary.csv", index=False)
+    print(f"\nSummary: {out_dir / 'summary.csv'}")
+
+
+def build_reference_cmd(data: Path, out: Path, cfg: Config, workers: int) -> None:
+    images = [im for im in find_bse_images(data) if im.batch in qa.CLASSES]
+    if not images:
+        raise SystemExit(f"No Batch_1/2/3 *_BSE.tif files under {data}")
+    ref = pd.DataFrame([qa.reference_row(m) for m in _measure_all(images, cfg, workers)])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    ref.to_csv(out, index=False)
+    v = qa.validate(qa.load_reference(out))
+    print(
+        f"Reference: {out} ({len(ref)} images); leave-one-out accuracy {v['accuracy']:.2f}, balanced {v['balanced_accuracy']:.2f}"
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="anode-qc", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    a = sub.add_parser(
+        "assess",
+        help="QC answer for new samples: batch, verdict vs the Batch_3 baseline, uncertainty, HTML report",
+    )
+    a.add_argument(
+        "images",
+        type=Path,
+        nargs="+",
+        help="*_BSE.tif files or folders (ETD/SE + Inlens siblings used if present)",
+    )
+    a.add_argument("--out", type=Path, default=Path("assessment"))
+    a.add_argument("--reference", type=Path, default=None, help="reference KPI table (default: bundled)")
+    a.add_argument("--config", type=Path, default=None)
+    a.add_argument("--workers", type=int, default=min(4, os.cpu_count() or 1))
+    a.add_argument("--bse-only", action="store_true", help="ignore ETD / Inlens images")
+    b = sub.add_parser(
+        "build-reference", help="measure labelled Batch_1/2/3 folders into the reference table"
+    )
+    b.add_argument("--data", type=Path, default=Path("data"))
+    b.add_argument("--out", type=Path, default=qa.REFERENCE_CSV)
+    b.add_argument("--config", type=Path, default=None)
+    b.add_argument("--workers", type=int, default=min(4, os.cpu_count() or 1))
     d = sub.add_parser(
         "download", help="download BSE / ETD / Inlens images from Hugging Face (needs HF_TOKEN)"
     )
@@ -167,7 +224,14 @@ def main(argv: list[str] | None = None) -> None:
     rp.add_argument("--out", type=Path, default=Path("outputs"))
     args = ap.parse_args(argv)
 
-    if args.cmd == "download":
+    if args.cmd in ("assess", "build-reference"):
+        cfg = Config.from_yaml(args.config)
+        if args.cmd == "assess":
+            cfg.multimodal.enabled &= not args.bse_only
+            assess_cmd(args.images, args.out, cfg, args.workers, args.reference)
+        else:
+            build_reference_cmd(args.data, args.out, cfg, args.workers)
+    elif args.cmd == "download":
         print(download_dataset(args.dest, token=os.environ.get("HF_TOKEN")))
     elif args.cmd == "run":
         cfg = Config.from_yaml(args.config)
