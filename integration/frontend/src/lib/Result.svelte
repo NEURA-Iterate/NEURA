@@ -88,24 +88,6 @@
     Array.isArray(result.trust_flags) ? result.trust_flags.filter(Boolean) : result.trust_flags ? String(result.trust_flags).split(/[;,\s]+/).filter(Boolean) : [],
   )
 
-  // QC decision against the approved baseline (Batch 3). Thresholds are a policy choice, not fitted.
-  const ACCEPT_AT = 0.7, REJECT_AT = 0.3
-  const qc = $derived.by(() => {
-    const p3 = pred.probabilities.Batch_3 ?? 0
-    const [lo3, hi3] = pred.interval?.Batch_3 ?? [p3, p3]
-    const closest = pred.predicted === 'Batch_3' ? pred.runner_up : pred.predicted
-    const reasons: string[] = []
-    if (pred.outlier) reasons.push('Its measurements are unusual for every reference batch, so this may be a new kind of variation.')
-    if (flags.length) reasons.push('Image-quality warnings reduce how far the measurements can be trusted.')
-    if (!pred.outlier && p3 >= ACCEPT_AT && !flags.length && lo3 >= 0.5)
-      return { kind: 'accept', word: 'Accept', line: `Consistent with the approved baseline: ${pct(p3)} probability it matches Batch 3.`, reasons }
-    if (!pred.outlier && p3 <= REJECT_AT && hi3 <= 0.5)
-      return { kind: 'reject', word: 'Reject', line: `Changed from the baseline: only ${pct(p3)} probability it matches Batch 3. It most resembles ${batchName(closest)}, a known type of variation.`, reasons }
-    if (p3 > REJECT_AT && p3 < ACCEPT_AT) reasons.push(`The probability of matching the baseline (${pct(p3)}) is between the accept (${pct(ACCEPT_AT)}) and reject (${pct(REJECT_AT)}) limits.`)
-    if ((p3 >= ACCEPT_AT && lo3 < 0.5) || (p3 <= REJECT_AT && hi3 > 0.5)) reasons.push(`The uncertainty is wide: the baseline probability could plausibly be anywhere from ${pct(lo3)} to ${pct(hi3)}.`)
-    return { kind: 'investigate', word: 'Investigate', line: 'Not conclusive. A materials expert should review this sample before a decision is made.', reasons }
-  })
-
   const KPI_WHY: Record<string, string> = {
     frac_pore: 'Pore space affects electrolyte access and electrode density.',
     graphite_crack_density: 'Cracks inside graphite can indicate mechanical damage during processing, e.g. calendering.',
@@ -126,6 +108,46 @@
         return { kpi, label: bs[0].label, z, value, median, rel, dir, why: KPI_WHY[kpi] ?? '' }
       })
       .sort((a, b) => Math.abs(b.z) - Math.abs(a.z))
+  })
+  // QC decision against the approved baseline (Batch 3). Thresholds are a policy choice, not fitted.
+  const ACCEPT_AT = 0.7, REJECT_AT = 0.3
+  const qc = $derived.by(() => {
+    const p3 = pred.probabilities.Batch_3 ?? 0
+    const [lo3, hi3] = pred.interval?.Batch_3 ?? [p3, p3]
+    const closest = pred.predicted === 'Batch_3' ? pred.runner_up : pred.predicted
+    const reasons: string[] = []
+    if (pred.outlier) reasons.push("This sample doesn't look like any batch we've seen before, including the baseline. It could be a new kind of change.")
+    for (const d of drivers.filter((d) => d.dir !== 'typical'))
+      reasons.push(`${d.label} is ${Math.abs(d.rel).toFixed(0)}% ${d.dir} than the baseline.`)
+    if (flags.length) reasons.push('The image has quality problems (see below), so the measurements are less certain.')
+    for (const s of segRows.filter((s) => s.level === 'large'))
+      reasons.push(`The two segmentation methods disagree on ${s.label.toLowerCase()} by ${s.diff.toFixed(0)}%.`)
+    if (!pred.outlier && p3 >= ACCEPT_AT && !flags.length && lo3 >= 0.5) {
+      if (!drivers.some((d) => d.dir !== 'typical')) reasons.push('All key measurements are within the normal baseline range.')
+      return { kind: 'accept', word: 'Accept', line: `Consistent with the approved baseline: ${pct(p3)} probability it matches Batch 3.`, reasons }
+    }
+    if (!pred.outlier && p3 <= REJECT_AT && hi3 <= 0.5)
+      return { kind: 'reject', word: 'Reject', line: `Changed from the baseline: only ${pct(p3)} probability it matches Batch 3. It most resembles ${batchName(closest)}, a known type of variation.`, reasons }
+    if (p3 > REJECT_AT && p3 < ACCEPT_AT) reasons.push(`The probability of matching the baseline (${pct(p3)}) is between the accept (${pct(ACCEPT_AT)}) and reject (${pct(REJECT_AT)}) limits.`)
+    if ((p3 >= ACCEPT_AT && lo3 < 0.5) || (p3 <= REJECT_AT && hi3 > 0.5)) reasons.push(`The uncertainty is wide: the baseline probability could plausibly be anywhere from ${pct(lo3)} to ${pct(hi3)}.`)
+    return { kind: 'investigate', word: 'Investigate', line: 'Not conclusive. A materials expert should review this sample before a decision is made.', reasons }
+  })
+
+  // Segmentation uncertainty for this upload: rule vs DINO masks, and rule boundary reassignment range.
+  const segRows = $derived.by(() => {
+    const kpis = [...new Set([...overview.classifiers.rule.kpis, ...overview.classifiers.learned.kpis])]
+    return kpis.flatMap((k) => {
+      const rv = result.kpis.rule?.[k]?.value, dv = result.kpis.learned?.[k]?.value
+      const lo = result.kpis.rule?.[k]?.lo, hi = result.kpis.rule?.[k]?.hi
+      if (!meta[k] || (rv === undefined && dv === undefined)) return []
+      const both = Number.isFinite(rv) && Number.isFinite(dv)
+      const diff = both ? (Math.abs(rv! - dv!) / ((Math.abs(rv!) + Math.abs(dv!)) / 2 || 1)) * 100 : NaN
+      const base = Number.isFinite(rv) ? rv! : dv!
+      const band = Number.isFinite(lo) && Number.isFinite(hi) && base ? (Math.max(Math.abs(hi! - base), Math.abs(base - lo!)) / Math.abs(base)) * 100 : NaN
+      const worst = Math.max(Number.isFinite(diff) ? diff : 0, Number.isFinite(band) ? band : 0)
+      const level = worst >= 25 ? 'large' : worst >= 10 ? 'moderate' : 'small'
+      return [{ k, label: meta[k].label, rv, dv, lo, hi, diff, band, level }]
+    })
   })
 </script>
 
@@ -150,7 +172,7 @@
     <div class="muted small policy">Accept if P(baseline) ≥ {pct(ACCEPT_AT)} and its uncertainty range stays above 50%; reject if ≤ {pct(REJECT_AT)} and it stays below 50%; otherwise investigate. These limits are a policy choice for the QC team, not fitted to data.</div>
   </div>
   <div class="flags">
-    {#if pred.outlier}<div class="warn"><b>Unusual sample:</b> its KPIs are atypical for every known batch (typicality p &lt; 0.01). It may belong to none of them.</div>{/if}
+    {#if pred.outlier}<div class="warn"><b>Unlike anything seen before:</b> this sample doesn't closely match the baseline or either known variant, so the "closest match" above is only a rough guide.</div>{/if}
     {#if pred.ambiguous && !pred.outlier}<div class="warn"><b>Ambiguous:</b> no batch reaches 70%.</div>{/if}
     {#each flags as f}{@const m = flagText(f)}<div class="warn"><b>{m.title}:</b> {m.body}</div>{/each}
     {#each result.warnings as w}<div class="warn">{w}</div>{/each}
@@ -176,6 +198,27 @@
     {/each}
   </ul>
   <p class="muted small">Values average the rule and DINO measurements where both exist; measurements are in pixels (the images carry no scale). Within 1 standard deviation of the baseline counts as normal.</p>
+</section>
+
+<section class="card">
+  <h2>Segmentation uncertainty for this sample</h2>
+  <p class="muted small">Each KPI is measured on two independent segmentations of the image (rule-based and DINO). If they disagree, or if moving the phase boundaries by a pixel or two changes the value a lot, that KPI is less certain for this sample.</p>
+  <div class="tscroll"><table>
+    <thead><tr><th>KPI</th><th class="num">Rule masks</th><th class="num">DINO masks</th><th class="num">Rule vs DINO</th><th class="num">Boundary shift</th><th>Certainty</th></tr></thead>
+    <tbody>
+      {#each segRows as s}
+        <tr>
+          <td>{s.label}</td>
+          <td class="num">{fmtKpi(s.rv, meta[s.k])}</td>
+          <td class="num">{fmtKpi(s.dv, meta[s.k])}</td>
+          <td class="num">{Number.isFinite(s.diff) ? `${s.diff.toFixed(0)}% apart` : '–'}</td>
+          <td class="num">{Number.isFinite(s.band) ? `±${s.band.toFixed(0)}%` : '–'}{#if Number.isFinite(s.lo) && Number.isFinite(s.hi)}<br /><small class="muted">{fmtKpi(s.lo, meta[s.k])}–{fmtKpi(s.hi, meta[s.k])}</small>{/if}</td>
+          <td><span class="seg seg-{s.level}">{s.level === 'small' ? 'reliable' : s.level === 'moderate' ? 'some doubt' : 'uncertain'}</span></td>
+        </tr>
+      {/each}
+    </tbody>
+  </table></div>
+  <p class="muted small">Reliable: both checks within 10%. Some doubt: 10–25%. Uncertain: over 25%.</p>
 </section>
 
 <div class="cols">
@@ -369,6 +412,10 @@
   .qcline { font-size: 1.05rem; color: #1f2937; margin-top: 4px; }
   .qcwhy { text-align: left; display: inline-block; margin: 10px auto 0; color: #374151; font-size: 0.95rem; }
   .policy { max-width: 640px; margin: 10px auto 0; }
+  .seg { font-size: 0.8rem; font-weight: 700; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+  .seg-small { background: #e8f5ec; color: #1a7f37; }
+  .seg-moderate { background: #fff4e0; color: #9a5b00; }
+  .seg-large { background: #fdecec; color: #c62828; }
   .drivers { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
   .drivers li { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: start; }
   .dtag { font-size: 0.85rem; font-weight: 700; border-radius: 999px; padding: 4px 10px; text-align: center; background: #eef0f3; color: #4b5563; }

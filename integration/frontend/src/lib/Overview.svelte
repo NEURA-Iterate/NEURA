@@ -211,13 +211,8 @@
   {/if}
 
   <section class="card">
-    <h2>Limits and uncertainty</h2>
+    <h2>Limits</h2>
     <ul class="muted">
-      <li>QC decision: accept if P(baseline) ≥ 70% and its uncertainty range stays above 50%, reject if ≤ 30% and it stays below 50%, otherwise investigate. These limits are a policy choice for the QC team, not fitted to data.</li>
-      <li>A sample whose measurements are unusual for every reference batch (typicality p &lt; 0.01) is flagged as possibly new variation and sent to investigate, rather than forced into a known batch.</li>
-      <li>Probability uncertainty comes from refitting the classifiers on 200 bootstrap resamples of the 31 reference samples. Measurement uncertainty comes from reassigning pixels at phase boundaries.</li>
-      <li>Reliability checks: porosity and Si heterogeneity agree closely between rule and DINO masks (ρ ≈ 0.96); graphite aspect ratio less so (ρ ≈ 0.6).</li>
-      <li>Si heterogeneity is dominated by where the few Si agglomerates fall: its left-half and right-half values of the same image barely agree (ρ ≈ 0). Treat it as weak evidence; more image area per sample would help.</li>
       <li>Only 31 labelled samples (7 / 7 / 17); the validation numbers are optimistic because many variants were tried on them.</li>
       <li>The DINO segmentation was trained on rule masks, so it is not independently validated; expert-labelled masks are needed for that.</li>
       <li>Sizes are in pixels (the TIFFs carry no pixel size), so all samples must share the same magnification.</li>
