@@ -57,6 +57,15 @@
       return [{ k, label: meta[k].label, value, status, pos, ...st }]
     }),
   )
+  const whyRows = $derived(
+    result.contributions.map((c) => {
+      const batches = [pred.predicted, pred.runner_up].map((b) => ({ b, st: overview.batch_stats?.[c.source]?.[c.kpi]?.[b] }))
+      const xs = [c.value, ...batches.flatMap((x) => (x.st ? [x.st.p25, x.st.p75, x.st.median] : []))].filter(Number.isFinite)
+      const lo = Math.min(...xs), hi = Math.max(...xs), pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.05 || 1
+      const pos = (x: number) => ((x - (lo - pad)) / (hi - lo + 2 * pad)) * 100
+      return { ...c, batches, pos, weight: Math.abs(c.evidence) / evMax }
+    }),
+  )
   const flags = $derived(
     Array.isArray(result.trust_flags) ? result.trust_flags.filter(Boolean) : result.trust_flags ? String(result.trust_flags).split(/[;,\s]+/).filter(Boolean) : [],
   )
@@ -108,18 +117,38 @@
 
   <section class="card">
     <h2>Why</h2>
-    <ul class="expl">{#each result.explanation as e}<li>{e}</li>{/each}</ul>
-    <h3>Evidence for {short(pred.predicted)} over {short(pred.runner_up)}, per KPI</h3>
-    <div class="ev">
-      {#each result.contributions as c}
-        <span class="lab">{c.label} <small>({c.source === 'rule' ? 'rule' : 'DINO'})</small></span>
-        <span class="val">{c.display}</span>
-        <div class="axis">
-          <div class="bar" style="{c.evidence >= 0 ? 'left:50%' : `right:50%`}; width:{(Math.abs(c.evidence) / evMax) * 50}%; background:{c.evidence >= 0 ? batchColor(pred.predicted) : batchColor(pred.runner_up)}"></div>
+    <p class="muted small">How this sample compares with typical {pred.predicted.replace('_', ' ')} and {pred.runner_up.replace('_', ' ')} samples, most decisive first.</p>
+    <div class="why">
+      {#each whyRows as r}
+        <div class="wrow">
+          <div class="whead">
+            <span class="wlab">{r.label} <small class="muted">({r.source === 'rule' ? 'rule' : 'DINO'})</small></span>
+            <span class="wval">{r.display}</span>
+          </div>
+          <div class="wline">
+            {#each r.batches as bt, i}
+              {#if bt.st}
+                <div class="wband" style="left:{r.pos(bt.st.p25)}%; width:{Math.max(r.pos(bt.st.p75) - r.pos(bt.st.p25), 0.8)}%; background:{batchColor(bt.b)}; top:{i === 0 ? 2 : 13}px"></div>
+                <div class="wmed" style="left:{r.pos(bt.st.median)}%; background:{batchColor(bt.b)}; top:{i === 0 ? 0 : 11}px"></div>
+              {/if}
+            {/each}
+            <div class="wdot" style="left:{r.pos(r.value)}%"></div>
+          </div>
+          <div class="wfoot">
+            <span class="small">
+              {#each r.batches as bt, i}{#if bt.st}{i ? ' · ' : ''}<span style="color:{batchColor(bt.b)}">{short(bt.b)} typical {fmtKpi(bt.st.median, meta[r.kpi])}</span>{/if}{/each}
+            </span>
+            {#if r.favours}
+              <span class="wfav" style="background:{batchColor(r.favours)}1f; color:{batchColor(r.favours)}">
+                favours {short(r.favours)}
+                <span class="wweight"><span style="width:{r.weight * 100}%; background:{batchColor(r.favours)}"></span></span>
+              </span>
+            {/if}
+          </div>
         </div>
       {/each}
     </div>
-    <p class="muted small">Bars right favour {short(pred.predicted)}, left favour {short(pred.runner_up)}. Length = half the log-likelihood ratio (each classifier has half a vote).</p>
+    <p class="muted small">Black dot: this sample. Coloured bands: middle 50% of each batch's training samples, tick: its median. The small bar shows how much each measurement counts towards the result.</p>
   </section>
 </div>
 
@@ -272,7 +301,19 @@
   .kstat.within { background: #dff3e4; color: #1d6b33; }
   .kstat.above, .kstat.below { background: #fff1d6; color: #8a5a00; }
   .small { font-size: 0.78rem; }
-  .expl { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 4px; }
+  .why { display: grid; gap: 18px; margin: 12px 0; }
+  .wrow { display: grid; gap: 6px; }
+  .whead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .wlab { font-weight: 500; }
+  .wval { font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .wline { position: relative; height: 22px; background: linear-gradient(#e3e6ea, #e3e6ea) 0 50% / 100% 2px no-repeat; }
+  .wband { position: absolute; height: 7px; border-radius: 999px; opacity: 0.4; }
+  .wmed { position: absolute; width: 3px; height: 11px; border-radius: 2px; transform: translateX(-1.5px); }
+  .wdot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: #1d1d1f; border: 2px solid #fff; box-shadow: 0 0 0 1px #1d1d1f; transform: translate(-50%, -50%); }
+  .wfoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .wfav { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .wweight { display: inline-block; width: 40px; height: 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.08); overflow: hidden; }
+  .wweight span { display: block; height: 100%; border-radius: 999px; }
   .ev { display: grid; grid-template-columns: minmax(150px, 1.2fr) 70px 1.5fr; gap: 4px 8px; align-items: center; font-size: 0.82rem; }
   .ev .val { text-align: right; font-variant-numeric: tabular-nums; }
   .axis, .zaxis { position: relative; height: 12px; background: linear-gradient(#bbb, #bbb) 50% / 1px 100% no-repeat; }
