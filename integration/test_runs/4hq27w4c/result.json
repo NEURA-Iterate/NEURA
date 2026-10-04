@@ -1,0 +1,664 @@
+{
+  "sample_id": "4hq27w4c",
+  "known_batch": null,
+  "timings": {
+    "rule": 60.197486799001126,
+    "features": 18.62338982899928,
+    "prediction_and_learned_kpis": 26.904382614999122,
+    "classification": 1.4695669000011549,
+    "visuals": 11.775736024001162,
+    "total": 118.97068039999976
+  },
+  "warnings": [],
+  "trust_flags": "",
+  "prediction": {
+    "predicted": "Batch_1",
+    "runner_up": "Batch_2",
+    "probabilities": {
+      "Batch_1": 0.9733606389287324,
+      "Batch_2": 0.02622300046960499,
+      "Batch_3": 0.00041636060166269515
+    },
+    "interval": {
+      "Batch_1": [
+        0.8597511570916126,
+        0.9967212809689214
+      ],
+      "Batch_2": [
+        0.0032577688475116232,
+        0.13711380223082392
+      ],
+      "Batch_3": [
+        7.148230418963538e-06,
+        0.003362604030225275
+      ]
+    },
+    "tier": "high",
+    "ambiguous": false,
+    "outlier": false
+  },
+  "classifiers": {
+    "rule": {
+      "kpis": {
+        "frac_pore": 0.05889746166252784,
+        "graphite_crack_density": 39.10158100191749,
+        "graphite_aspect_ratio_median": 1.5756044440293668,
+        "si_contact_graphite": 0.6848015551075161,
+        "si_fraction_of_solids": 0.06719589606004422,
+        "si_ecd_d50": 42.32885227601547,
+        "si_ecd_d90": 137.64797030875667,
+        "si_cv_w256": 1.8617957618881003,
+        "si_crack_density": 8.223190028433262,
+        "si_dispersion_index_w512": 1.1069240625371404,
+        "cbd_fraction_of_solids": 0.12814108193286539,
+        "graphite_alignment": 0.18511189955609847
+      },
+      "probabilities": {
+        "Batch_1": 0.9973649561989306,
+        "Batch_2": 0.0025678553583041697,
+        "Batch_3": 6.718844276514243e-05
+      },
+      "interval": {
+        "Batch_1": [
+          0.9668335370712802,
+          0.9998502086597052
+        ],
+        "Batch_2": [
+          0.00014580028583126674,
+          0.03023455904712855
+        ],
+        "Batch_3": [
+          4.147972408053693e-08,
+          0.0032089368429809844
+        ]
+      },
+      "typicality": {
+        "Batch_1": 0.23430798705805006,
+        "Batch_2": 0.0044133347547316544,
+        "Batch_3": 0.00012837014135374757
+      },
+      "evidence": {
+        "frac_pore": 3.8364926162239987,
+        "graphite_crack_density": 1.468098814013178,
+        "si_cv_w256": 0.6574542675116111
+      }
+    },
+    "learned": {
+      "kpis": {
+        "frac_pore": 0.06557618479216269,
+        "graphite_crack_density": 24.18922626447586,
+        "graphite_aspect_ratio_median": 1.5839164974759319,
+        "si_contact_graphite": 0.16361544185080723,
+        "si_fraction_of_solids": 0.06546709828373212,
+        "si_ecd_d50": 40.887501780059964,
+        "si_ecd_d90": 148.34584322385,
+        "si_cv_w256": 1.909563409465508,
+        "si_crack_density": 5.732501430400784,
+        "si_dispersion_index_w512": 1.0941111054996255,
+        "cbd_fraction_of_solids": 0.12446143889272543,
+        "graphite_alignment": 0.1827377380601257
+      },
+      "probabilities": {
+        "Batch_1": 0.7784404266699776,
+        "Batch_2": 0.21944522466553312,
+        "Batch_3": 0.002114348664489217
+      },
+      "interval": {
+        "Batch_1": [
+          0.23443134996261963,
+          0.9792485275961224
+        ],
+        "Batch_2": [
+          0.018504237794173192,
+          0.7646184638014925
+        ],
+        "Batch_3": [
+          1.4175969021331303e-05,
+          0.019097252863507875
+        ]
+      },
+      "typicality": {
+        "Batch_1": 0.06890893130712535,
+        "Batch_2": 0.019626280973178156,
+        "Batch_3": 0.0004353366992466416
+      },
+      "evidence": {
+        "frac_pore": 3.147188264276495,
+        "graphite_aspect_ratio_median": -1.6280790514741694,
+        "si_cv_w256": -0.252919403111056
+      }
+    }
+  },
+  "contributions": [
+    {
+      "source": "rule",
+      "kpi": "frac_pore",
+      "label": "Porosity",
+      "value": 0.05889746166252784,
+      "display": "5.9%",
+      "per_batch": {
+        "Batch_1": -0.5612106237541359,
+        "Batch_2": -2.4794569318661352,
+        "Batch_3": -4.1431098747673625
+      },
+      "favours": "Batch_1",
+      "evidence": 1.9182463081119994
+    },
+    {
+      "source": "learned",
+      "kpi": "frac_pore",
+      "label": "Porosity",
+      "value": 0.06557618479216269,
+      "display": "6.6%",
+      "per_batch": {
+        "Batch_1": -0.3509715569993054,
+        "Batch_2": -1.9245656891375527,
+        "Batch_3": -3.4652286920485715
+      },
+      "favours": "Batch_1",
+      "evidence": 1.5735941321382474
+    },
+    {
+      "source": "learned",
+      "kpi": "graphite_aspect_ratio_median",
+      "label": "Graphite aspect ratio (median)",
+      "value": 1.5839164974759319,
+      "display": "1.58",
+      "per_batch": {
+        "Batch_1": 0.22528134951579815,
+        "Batch_2": 1.0393208752528829,
+        "Batch_3": -0.013933379221519049
+      },
+      "favours": "Batch_2",
+      "evidence": -0.8140395257370847
+    },
+    {
+      "source": "rule",
+      "kpi": "graphite_crack_density",
+      "label": "Graphite crack density",
+      "value": 39.10158100191749,
+      "display": "39.1",
+      "per_batch": {
+        "Batch_1": 0.016063176155158176,
+        "Batch_2": -0.7179862308514309,
+        "Batch_3": -1.3036565931866382
+      },
+      "favours": "Batch_1",
+      "evidence": 0.734049407006589
+    },
+    {
+      "source": "rule",
+      "kpi": "si_cv_w256",
+      "label": "Si heterogeneity (CV, 256 px windows)",
+      "value": 1.8617957618881003,
+      "display": "1.86",
+      "per_batch": {
+        "Batch_1": 0.7626421497029363,
+        "Batch_2": 0.4339150159471308,
+        "Batch_3": 0.8615757769341497
+      },
+      "favours": "Batch_1",
+      "evidence": 0.32872713375580553
+    },
+    {
+      "source": "learned",
+      "kpi": "si_cv_w256",
+      "label": "Si heterogeneity (CV, 256 px windows)",
+      "value": 1.909563409465508,
+      "display": "1.91",
+      "per_batch": {
+        "Batch_1": 0.4963091925442984,
+        "Batch_2": 0.6227688940998264,
+        "Batch_3": 0.8955082262781833
+      },
+      "favours": "Batch_2",
+      "evidence": -0.126459701555528
+    }
+  ],
+  "explanation": [
+    "Porosity 5.9% (rule masks) favours Batch 1 over Batch 2: typical Batch 1 is 11.5%, Batch 2 12.4%.",
+    "Porosity 6.6% (DINO masks) favours Batch 1 over Batch 2: typical Batch 1 is 9.9%, Batch 2 11.2%.",
+    "Graphite aspect ratio (median) 1.58 (DINO masks) favours Batch 2 over Batch 1: typical Batch 2 is 1.63, Batch 1 1.65.",
+    "Graphite crack density 39.1 (rule masks) favours Batch 1 over Batch 2: typical Batch 1 is 47.7, Batch 2 51.4.",
+    "Si heterogeneity (CV, 256 px windows) 1.86 (rule masks) favours Batch 1 over Batch 2: typical Batch 1 is 1.81, Batch 2 2.02."
+  ],
+  "kpis": {
+    "rule": {
+      "frac_pore": {
+        "value": 0.05889746166252784,
+        "lo": 0.039241506873863956,
+        "hi": 0.08169780386233498
+      },
+      "graphite_crack_density": {
+        "value": 39.10158100191749,
+        "lo": 36.096248953705725,
+        "hi": 41.51024794342663
+      },
+      "graphite_aspect_ratio_median": {
+        "value": 1.5756044440293668,
+        "lo": null,
+        "hi": null
+      },
+      "si_contact_graphite": {
+        "value": 0.6848015551075161,
+        "lo": 0.6040687111589355,
+        "hi": 0.8561455821091866
+      },
+      "si_fraction_of_solids": {
+        "value": 0.06719589606004422,
+        "lo": 0.0583278235859379,
+        "hi": 0.07694661624898613
+      },
+      "si_ecd_d50": {
+        "value": 42.32885227601547,
+        "lo": 41.02709687681892,
+        "hi": 55.371119039823206
+      },
+      "si_ecd_d90": {
+        "value": 137.64797030875667,
+        "lo": 137.64797030875667,
+        "hi": 158.68067746903387
+      },
+      "si_cv_w256": {
+        "value": 1.8617957618881003,
+        "lo": null,
+        "hi": null
+      },
+      "si_crack_density": {
+        "value": 8.223190028433262,
+        "lo": 6.63849470348057,
+        "hi": 38.66537467578357
+      },
+      "si_dispersion_index_w512": {
+        "value": 1.1069240625371404,
+        "lo": 1.0950528401467463,
+        "hi": 1.1069314849755119
+      },
+      "cbd_fraction_of_solids": {
+        "value": 0.12814108193286539,
+        "lo": 0.11953742717077764,
+        "hi": 0.12814108193286539
+      },
+      "graphite_alignment": {
+        "value": 0.18511189955609847,
+        "lo": 0.17178410180486367,
+        "hi": 0.1905609598632458
+      }
+    },
+    "learned": {
+      "frac_pore": {
+        "value": 0.06557618479216269
+      },
+      "graphite_crack_density": {
+        "value": 24.18922626447586
+      },
+      "graphite_aspect_ratio_median": {
+        "value": 1.5839164974759319
+      },
+      "si_contact_graphite": {
+        "value": 0.16361544185080723
+      },
+      "si_fraction_of_solids": {
+        "value": 0.06546709828373212
+      },
+      "si_ecd_d50": {
+        "value": 40.887501780059964
+      },
+      "si_ecd_d90": {
+        "value": 148.34584322385
+      },
+      "si_cv_w256": {
+        "value": 1.909563409465508
+      },
+      "si_crack_density": {
+        "value": 5.732501430400784
+      },
+      "si_dispersion_index_w512": {
+        "value": 1.0941111054996255
+      },
+      "cbd_fraction_of_solids": {
+        "value": 0.12446143889272543
+      },
+      "graphite_alignment": {
+        "value": 0.1827377380601257
+      }
+    }
+  },
+  "baseline": {
+    "batch": "Batch_3",
+    "typicality": {
+      "rule": 0.00012837014135374757,
+      "learned": 0.0004353366992466416
+    },
+    "consistent_with_baseline": false,
+    "kpis": [
+      {
+        "source": "rule",
+        "kpi": "frac_pore",
+        "label": "Porosity",
+        "value": 0.05889746166252784,
+        "median": 0.142628466309226,
+        "p05": 0.13080305844438062,
+        "p95": 0.21399481957594452,
+        "z": -5.347065033384069,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "rule",
+        "kpi": "graphite_crack_density",
+        "label": "Graphite crack density",
+        "value": 39.10158100191749,
+        "median": 67.23670996865788,
+        "p05": 51.114388818779446,
+        "p95": 90.5410373070225,
+        "z": -2.6500315765674363,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "rule",
+        "kpi": "graphite_aspect_ratio_median",
+        "label": "Graphite aspect ratio (median)",
+        "value": 1.5756044440293668,
+        "median": 1.6413464285376729,
+        "p05": 1.6027028941974273,
+        "p95": 1.6792071189010795,
+        "z": -2.3788638515722553,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "rule",
+        "kpi": "si_contact_graphite",
+        "label": "Si\u2013graphite contact",
+        "value": 0.6848015551075161,
+        "median": 0.7882626603846268,
+        "p05": 0.7503441219083085,
+        "p95": 0.8875000443154494,
+        "z": -2.1873096130457035,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "rule",
+        "kpi": "si_fraction_of_solids",
+        "label": "Si fraction of solids",
+        "value": 0.06719589606004422,
+        "median": 0.0593428702735457,
+        "p05": 0.04796944055282154,
+        "p95": 0.07555125089442649,
+        "z": 0.7057201026386396,
+        "percentile": 76.47058823529412,
+        "direction": "typical"
+      },
+      {
+        "source": "rule",
+        "kpi": "si_ecd_d50",
+        "label": "Si particle size D50",
+        "value": 42.32885227601547,
+        "median": 42.85659805331355,
+        "p05": 34.11826317431074,
+        "p95": 51.49229166205404,
+        "z": -0.029443539805988128,
+        "percentile": 41.17647058823529,
+        "direction": "typical"
+      },
+      {
+        "source": "rule",
+        "kpi": "si_ecd_d90",
+        "label": "Si particle size D90",
+        "value": 137.64797030875667,
+        "median": 144.65406175232368,
+        "p05": 126.01946608987606,
+        "p95": 177.05164142384876,
+        "z": -0.39075056669106567,
+        "percentile": 41.17647058823529,
+        "direction": "typical"
+      },
+      {
+        "source": "rule",
+        "kpi": "si_cv_w256",
+        "label": "Si heterogeneity (CV, 256 px windows)",
+        "value": 1.8617957618881003,
+        "median": 1.8970582237320244,
+        "p05": 1.7757327149357862,
+        "p95": 2.0561992256180983,
+        "z": -0.36435871681432086,
+        "percentile": 41.17647058823529,
+        "direction": "typical"
+      },
+      {
+        "source": "rule",
+        "kpi": "si_crack_density",
+        "label": "Si crack density",
+        "value": 8.223190028433262,
+        "median": 22.22637062618861,
+        "p05": 12.88414723325152,
+        "p95": 51.46157564010398,
+        "z": -2.0343092268013705,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "rule",
+        "kpi": "si_dispersion_index_w512",
+        "label": "Si dispersion index (512 px)",
+        "value": 1.1069240625371404,
+        "median": 1.0572890141875837,
+        "p05": 0.899732090097636,
+        "p95": 1.3313364781554669,
+        "z": 0.23000222001284754,
+        "percentile": 64.70588235294117,
+        "direction": "typical"
+      },
+      {
+        "source": "rule",
+        "kpi": "cbd_fraction_of_solids",
+        "label": "Binder fraction of solids",
+        "value": 0.12814108193286539,
+        "median": 0.0994552778210138,
+        "p05": 0.0530051267907611,
+        "p95": 0.13849601874429848,
+        "z": 0.9602913547605919,
+        "percentile": 76.47058823529412,
+        "direction": "typical"
+      },
+      {
+        "source": "rule",
+        "kpi": "graphite_alignment",
+        "label": "Graphite alignment",
+        "value": 0.18511189955609847,
+        "median": 0.1473877453874187,
+        "p05": 0.10430447794086868,
+        "p95": 0.17778749268805824,
+        "z": 1.613612613202218,
+        "percentile": 100.0,
+        "direction": "higher"
+      },
+      {
+        "source": "learned",
+        "kpi": "frac_pore",
+        "label": "Porosity",
+        "value": 0.06557618479216269,
+        "median": 0.1359446751527188,
+        "p05": 0.12351748195806338,
+        "p95": 0.19245219550507578,
+        "z": -4.688777675539128,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "learned",
+        "kpi": "graphite_crack_density",
+        "label": "Graphite crack density",
+        "value": 24.18922626447586,
+        "median": 43.361002225782016,
+        "p05": 31.958415844992352,
+        "p95": 64.52826698060558,
+        "z": -2.574244973665198,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "learned",
+        "kpi": "graphite_aspect_ratio_median",
+        "label": "Graphite aspect ratio (median)",
+        "value": 1.5839164974759319,
+        "median": 1.6689258320776046,
+        "p05": 1.6311794674027513,
+        "p95": 1.7314233956899936,
+        "z": -2.488980669841021,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "learned",
+        "kpi": "si_contact_graphite",
+        "label": "Si\u2013graphite contact",
+        "value": 0.16361544185080723,
+        "median": 0.2301756704104623,
+        "p05": 0.17296603632370447,
+        "p95": 0.323289244707566,
+        "z": -1.6676483191923583,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "learned",
+        "kpi": "si_fraction_of_solids",
+        "label": "Si fraction of solids",
+        "value": 0.06546709828373212,
+        "median": 0.0601901814798141,
+        "p05": 0.04999703961631358,
+        "p95": 0.07610266358377729,
+        "z": 0.40274913001720763,
+        "percentile": 70.58823529411765,
+        "direction": "typical"
+      },
+      {
+        "source": "learned",
+        "kpi": "si_ecd_d50",
+        "label": "Si particle size D50",
+        "value": 40.887501780059964,
+        "median": 36.754688911266925,
+        "p05": 26.213017648316054,
+        "p95": 52.01140332534579,
+        "z": 0.41367167549513817,
+        "percentile": 58.82352941176471,
+        "direction": "typical"
+      },
+      {
+        "source": "learned",
+        "kpi": "si_ecd_d90",
+        "label": "Si particle size D90",
+        "value": 148.34584322385,
+        "median": 143.54300987638345,
+        "p05": 111.78119200946459,
+        "p95": 174.13175543571703,
+        "z": 0.47507956389458994,
+        "percentile": 76.47058823529412,
+        "direction": "typical"
+      },
+      {
+        "source": "learned",
+        "kpi": "si_cv_w256",
+        "label": "Si heterogeneity (CV, 256 px windows)",
+        "value": 1.909563409465508,
+        "median": 1.9225067526292705,
+        "p05": 1.7268569950222155,
+        "p95": 2.0304728997632355,
+        "z": 0.18382069001974716,
+        "percentile": 47.05882352941176,
+        "direction": "typical"
+      },
+      {
+        "source": "learned",
+        "kpi": "si_crack_density",
+        "label": "Si crack density",
+        "value": 5.732501430400784,
+        "median": 26.725660731111898,
+        "p05": 11.783989685665853,
+        "p95": 54.67834804854249,
+        "z": -2.5548789239710783,
+        "percentile": 0.0,
+        "direction": "lower"
+      },
+      {
+        "source": "learned",
+        "kpi": "si_dispersion_index_w512",
+        "label": "Si dispersion index (512 px)",
+        "value": 1.0941111054996255,
+        "median": 1.0470117835811517,
+        "p05": 0.9128387665457953,
+        "p95": 1.3123178014309114,
+        "z": 0.1627116503609543,
+        "percentile": 64.70588235294117,
+        "direction": "typical"
+      },
+      {
+        "source": "learned",
+        "kpi": "cbd_fraction_of_solids",
+        "label": "Binder fraction of solids",
+        "value": 0.12446143889272543,
+        "median": 0.1356113322940041,
+        "p05": 0.0970132311562066,
+        "p95": 0.19598617132250315,
+        "z": -0.4016577476173604,
+        "percentile": 47.05882352941176,
+        "direction": "typical"
+      },
+      {
+        "source": "learned",
+        "kpi": "graphite_alignment",
+        "label": "Graphite alignment",
+        "value": 0.1827377380601257,
+        "median": 0.1509236969344744,
+        "p05": 0.1088894189102709,
+        "p95": 0.16874037601647202,
+        "z": 1.5512788509476123,
+        "percentile": 100.0,
+        "direction": "higher"
+      }
+    ]
+  },
+  "images": {
+    "bse": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/bse.png",
+    "rule_overlay": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/rule_overlay.png",
+    "learned_overlay": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/learned_overlay.png",
+    "cracks": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/cracks.png",
+    "zoom_bse": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/zoom_bse.png",
+    "zoom_rule": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/zoom_rule.png",
+    "zoom_learned": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/zoom_learned.png",
+    "zoom_cracks": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/zoom_cracks.png",
+    "kpi_pore": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/kpi_pore.jpg",
+    "kpi_cracks": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/kpi_cracks.jpg",
+    "kpi_si": "/api/files/jobs/776b05b234334e5881f796de8bf6945c/kpi_si.jpg"
+  },
+  "legend": {
+    "si": {
+      "label": "Si",
+      "color": "#ff8c00"
+    },
+    "graphite": {
+      "label": "Graphite",
+      "color": "#59636e"
+    },
+    "pore": {
+      "label": "Pore",
+      "color": "#1e3cff"
+    },
+    "binder": {
+      "label": "Binder",
+      "color": "#28c828"
+    },
+    "gap": {
+      "label": "Gap",
+      "color": "#ff00ff"
+    },
+    "crack": {
+      "label": "Crack",
+      "color": "#ff3030"
+    }
+  }
+}
