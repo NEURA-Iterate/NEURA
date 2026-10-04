@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neura-integration-backend"
+version = "0.1.0"
+description = "FastAPI backend for interpretable SEM batch classification"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "httpx>=0.27",
+    "matplotlib>=3.7",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "pillow>=10",
+    "python-multipart>=0.0.9",
+    "pyyaml>=6.0",
+    "scikit-image>=0.22",
+    "scikit-learn>=1.3",
+    "scipy>=1.10",
+    "tifffile>=2023.7",
+    "torch>=2.1",
+    "transformers>=4.38",
+    "uvicorn>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["neura_app*"]
