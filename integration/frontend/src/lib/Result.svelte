@@ -2,7 +2,6 @@
   import type { Overview, Result, Source, Images } from './types'
   import { batchColor, batchName, flagText, fmtKpi, pct, short, SOURCE_LABEL } from './format'
   import ProbBars from './ProbBars.svelte'
-  import KpiExplainer from './KpiExplainer.svelte'
   import Scatter from './Scatter.svelte'
   import Legend from './Legend.svelte'
 
@@ -89,11 +88,27 @@
     Array.isArray(result.trust_flags) ? result.trust_flags.filter(Boolean) : result.trust_flags ? String(result.trust_flags).split(/[;,\s]+/).filter(Boolean) : [],
   )
 
-  const KPI_WHY: Record<string, string> = {
-    frac_pore: 'Pore space affects electrolyte access and electrode density.',
-    graphite_crack_density: 'Cracks inside graphite can indicate mechanical damage during processing, e.g. calendering.',
-    si_cv_w256: 'Uneven Si distribution can create local swelling hot-spots during cycling.',
-    graphite_aspect_ratio_median: 'Graphite particle shape reflects the supplied powder and how it was processed.',
+  const KPI_WHY: Record<string, { what: string; how: string; why: string }> = {
+    frac_pore: {
+      what: 'The share of the electrode cross-section that is empty pore space.',
+      how: 'Pixels segmented as voids (dark in BSE, low signal in the Inlens image) divided by all pixels, measured on both the rule and DINO masks.',
+      why: 'Pores hold the electrolyte that carries lithium ions to the active particles. More porosity eases ion transport and fast charging, but means less active material per volume (lower volumetric energy) and weaker particle-to-particle contact. Porosity is set mostly by calendering pressure and slurry formulation, so a shift usually points to a change in pressing or mixing.',
+    },
+    graphite_crack_density: {
+      what: 'How much cracking there is inside the graphite particles.',
+      how: 'Thin, dark line features are detected in the ETD (secondary-electron) image, which shows surface topography. Crack pixels inside graphite are counted per 10,000 px² of graphite area.',
+      why: 'Cracks expose fresh graphite surface. The SEI passivation layer forms on that surface during the first cycles, consuming lithium and electrolyte (capacity loss), and cracks can break electronic paths inside particles. Cracking usually comes from mechanical stress, such as heavy calendering or milling, or from a different graphite grade.',
+    },
+    si_cv_w256: {
+      what: 'How unevenly the silicon is distributed through the electrode.',
+      how: 'The image is cut into 256 × 256 px windows. In each window with enough solid material, the Si share of the solids is measured. The value is the coefficient of variation (standard deviation ÷ mean) across windows: 0 = perfectly even, higher = patchier.',
+      why: 'Si stores far more lithium than graphite but expands by up to about 300% when lithiated. When Si is clustered, that swelling is concentrated locally, which can crack the coating, cause delamination and give uneven current density. A higher value usually means poorer dispersion of Si during slurry mixing. Si is only about 1–2% of the solids here, so this value is noisy within a single image.',
+    },
+    graphite_aspect_ratio_median: {
+      what: 'How elongated (flake-like) the graphite particles are.',
+      how: 'Each graphite particle in the DINO masks is fitted with an ellipse; its aspect ratio is the long axis ÷ short axis (1 = round). The value is the median over all particles.',
+      why: 'Flake-like graphite tends to lie flat when the electrode is pressed, which makes lithium ions take a longer, more tortuous path through the thickness and slows charging. Rounder (spheroidised) graphite packs more evenly. A shift suggests a different graphite powder or a change in milling.',
+    },
   }
   const drivers = $derived.by(() => {
     const groups = new Map<string, typeof result.baseline.kpis>()
@@ -110,7 +125,7 @@
         const all = [...pts, value, median].filter(Number.isFinite)
         const pad = (Math.max(...all) - Math.min(...all)) * 0.15
         const range: [number, number] | null = all.length > 1 ? [Math.max(0, Math.min(...all) - pad), Math.max(...all) + pad] : null
-        return { kpi, label: bs[0].label, z, value, median, rel, dir, range, why: KPI_WHY[kpi] ?? '' }
+        return { kpi, label: bs[0].label, z, value, median, rel, dir, range, why: KPI_WHY[kpi] }
       })
       .sort((a, b) => Math.abs(b.z) - Math.abs(a.z))
   })
@@ -195,8 +210,14 @@
           {:else}
             is {Math.abs(d.rel).toFixed(0)}% {d.dir} than the baseline median ({fmtKpi(d.value, meta[d.kpi])} vs {fmtKpi(d.median, meta[d.kpi])}; {Math.abs(d.z).toFixed(1)} standard deviations).
           {/if}
+          {#if d.why}
+            <dl class="sci">
+              <dt>What it measures</dt><dd>{d.why.what}</dd>
+              <dt>How it is computed</dt><dd>{d.why.how}</dd>
+              <dt>Why it matters</dt><dd>{d.why.why}</dd>
+            </dl>
+          {/if}
         </div>
-        {#if d.range}<KpiExplainer kpi={d.kpi} sample={d.value} baseline={d.median} lo={d.range[0]} hi={d.range[1]} fmt={(x) => fmtKpi(x, meta[d.kpi])} />{/if}
       </li>
     {/each}
   </ul>
@@ -417,8 +438,12 @@
   .seg-small { background: #e8f5ec; color: #1a7f37; }
   .seg-moderate { background: #fff4e0; color: #9a5b00; }
   .seg-large { background: #fdecec; color: #c62828; }
+  .sci { display: grid; grid-template-columns: 150px 1fr; gap: 3px 12px; margin: 8px 0 0; font-size: 0.85rem; color: #374151; }
+  .sci dt { font-weight: 600; color: #6b7280; }
+  .sci dd { margin: 0; }
+  @media (max-width: 700px) { .sci { grid-template-columns: 1fr; } .sci dd { margin-bottom: 4px; } }
   .drivers { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-  .drivers li { display: grid; grid-template-columns: 130px 1fr 300px; gap: 12px; align-items: start; }
+  .drivers li { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: start; padding-bottom: 12px; border-bottom: 1px solid #f0f1f3; }
   .dtag { font-size: 0.85rem; font-weight: 700; border-radius: 999px; padding: 4px 10px; text-align: center; background: #eef0f3; color: #4b5563; }
   .drv-higher .dtag, .drv-lower .dtag { background: #fdecec; color: #c62828; }
   .drv-typical .dtag { background: #e8f5ec; color: #1a7f37; }
