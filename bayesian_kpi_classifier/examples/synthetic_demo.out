@@ -1,0 +1,37 @@
+In-distribution sample with measurement SD:
+Predicted batch: B2 (P = 0.93); runner-up: B1
+Posterior: B1: 0.05, B2: 0.93, B3: 0.01
+Typicality p-values: B1: 0.175, B2: 0.968, B3: 0.094
+Per-KPI log-evidence B2 vs B1 (+ favours B2): si_frac: +2.68, d50: +0.49, porosity: -0.35, agglom: +0.09
+
+Sample represented by perturbed segmentation runs:
+Predicted batch: B2 (P = 0.91); runner-up: B1
+Posterior: B1: 0.08, B2: 0.91, B3: 0.01
+Typicality p-values: B1: 0.247, B2: 0.973, B3: 0.068
+Per-KPI log-evidence B2 vs B1 (+ favours B2): si_frac: +2.28, d50: +0.49, porosity: -0.35, agglom: -0.00
+
+Outlier sample:
+Predicted batch: B2 (P = 0.77); runner-up: B3
+Posterior: B1: 0.01, B2: 0.77, B3: 0.22
+Typicality p-values: B1: 0.000, B2: 0.000, B3: 0.000
+FLAG: sample is atypical for every batch (possible new/defective batch).
+Per-KPI log-evidence B2 vs B3 (+ favours B2): porosity: +6.16, d50: -4.64, agglom: -2.18, si_frac: +1.91
+
+Leave-one-out metrics:
+  accuracy: 1.0000
+  log_loss: 0.1299
+  brier: 0.0595
+  baseline_log_loss: 1.0986
+
+KPI separation:
+  agglom: 21.058
+  si_frac: 20.323
+  porosity: 10.382
+  d50: 4.249
+
+Top five KPI subsets by leave-one-out log-loss:
+  si_frac, d50, agglom: log_loss=0.1740, accuracy=0.952
+  si_frac, porosity, agglom: log_loss=0.1926, accuracy=0.905
+  si_frac, agglom: log_loss=0.2089, accuracy=0.952
+  si_frac, porosity, d50: log_loss=0.2835, accuracy=0.905
+  si_frac, porosity: log_loss=0.3390, accuracy=0.762
