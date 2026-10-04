@@ -211,11 +211,13 @@
             is {Math.abs(d.rel).toFixed(0)}% {d.dir} than the baseline median ({fmtKpi(d.value, meta[d.kpi])} vs {fmtKpi(d.median, meta[d.kpi])}; {Math.abs(d.z).toFixed(1)} standard deviations).
           {/if}
           {#if d.why}
+            <details class="scid"><summary>The science behind it</summary>
             <dl class="sci">
               <dt>What it measures</dt><dd>{d.why.what}</dd>
               <dt>How it is computed</dt><dd>{d.why.how}</dd>
               <dt>Why it matters</dt><dd>{d.why.why}</dd>
             </dl>
+            </details>
           {/if}
         </div>
       </li>
@@ -438,6 +440,7 @@
   .seg-small { background: #e8f5ec; color: #1a7f37; }
   .seg-moderate { background: #fff4e0; color: #9a5b00; }
   .seg-large { background: #fdecec; color: #c62828; }
+  .scid summary { cursor: pointer; font-size: 0.85rem; color: #2563eb; margin-top: 4px; width: fit-content; }
   .sci { display: grid; grid-template-columns: 150px 1fr; gap: 3px 12px; margin: 8px 0 0; font-size: 0.85rem; color: #374151; }
   .sci dt { font-weight: 600; color: #6b7280; }
   .sci dd { margin: 0; }
