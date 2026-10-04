@@ -352,8 +352,8 @@ def train_fold(
     device: str | torch.device = "cpu",
     seed: int = 0,
 ) -> tuple[torch.nn.Module, dict]:
-    if not train_samples:
-        raise ValueError("Training needs at least one image")
+    if not train_samples or not validation_samples:
+        raise ValueError("Each fold needs at least one training and validation image")
     torch.manual_seed(seed)
     device = torch.device(device)
     in_dim = int(train_samples[0].features.shape[-1])
@@ -375,14 +375,6 @@ def train_fold(
             loss = masked_cross_entropy(head(features, images), targets, weights)
             loss.backward()
             optimizer.step()
-
-        if not validation_samples:
-            best_state = {key: value.detach().cpu().clone() for key, value in head.state_dict().items()}
-            best_metrics = {
-                "last_epoch": epoch + 1,
-                "train_loss": float(loss.detach().cpu()),
-            }
-            continue
 
         head.eval()
         losses, all_predictions, all_targets = [], [], []
@@ -434,7 +426,7 @@ def main() -> None:
     parser.add_argument("--labels", required=True, help="pseudo or directory of PNG/NPY label maps")
     parser.add_argument("--label-cache", type=Path)
     parser.add_argument("--head", choices=("linear", "fusion"), default="fusion")
-    parser.add_argument("--split", choices=("kfold", "holdout", "all"), default="kfold")
+    parser.add_argument("--split", choices=("kfold", "holdout"), default="kfold")
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=10)
@@ -448,64 +440,6 @@ def main() -> None:
     torch.set_num_threads(os.cpu_count() or 1)
     args.out.mkdir(parents=True, exist_ok=True)
     device = _select_device(args.device)
-    if args.split == "all":
-        images = find_bse_images(args.images)
-        split = {
-            "train": [image.image_id for image in images],
-            "val": [],
-            "test": [],
-        }
-        (args.out / "split.json").write_text(json.dumps(split, indent=2) + "\n", encoding="utf-8")
-        samples = load_training_samples(
-            args.images,
-            args.features,
-            args.labels,
-            label_cache=args.label_cache,
-        )
-        head, metrics = train_fold(
-            samples,
-            [],
-            head_name=args.head,
-            epochs=args.epochs,
-            crop_size=args.crop_size,
-            crops_per_image=args.crops_per_image,
-            batch_size=args.batch_size,
-            device=device,
-            seed=args.seed,
-        )
-        checkpoint_path = args.out / "model.pt"
-        torch.save(
-            {
-                "state_dict": head.state_dict(),
-                "head": args.head,
-                "in_dim": int(samples[0].features.shape[-1]),
-                "n_classes": len(CLASSES),
-                "classes": CLASSES,
-                "patch_size": PATCH_SIZE,
-                "crop_size": args.crop_size,
-                "train_image_ids": split["train"],
-                "validation_image_ids": split["val"],
-                "test_image_ids": split["test"],
-            },
-            checkpoint_path,
-        )
-        summary = {
-            "head": args.head,
-            "split": "all",
-            "epochs": args.epochs,
-            "device": str(device),
-            "seed": args.seed,
-            "classes": CLASSES,
-            "checkpoint": checkpoint_path.name,
-            "train_image_ids": split["train"],
-            "validation_image_ids": split["val"],
-            "test_image_ids": split["test"],
-            "metrics": metrics,
-        }
-        (args.out / "metrics.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-        print(f"all samples: {metrics}")
-        return
-
     if args.split == "holdout":
         images = find_bse_images(args.images)
         split = holdout_image_split(
