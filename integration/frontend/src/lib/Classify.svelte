@@ -186,7 +186,7 @@
       {:else}
         <h2>{job.status === 'queued' ? 'Queued' : 'Classifying'}…</h2>
         <div class="pbar"><div style="width:{Math.max(job.progress, 0.03) * 100}%"></div></div>
-        <span class="muted">{job.step} · usually 1–3 min on CPU. You can leave this page; the run is saved to history.</span>
+        <span class="muted">{job.step} · usually 1–2 min. You can leave this page; the run is saved to history.</span>
       {/if}
     </section>
   {/if}

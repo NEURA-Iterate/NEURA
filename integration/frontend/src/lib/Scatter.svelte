@@ -36,12 +36,55 @@
     })
   }
   let hover = $state<string | null>(null)
+
+  // Shaded regions: where each batch is most likely given these two KPIs alone
+  // (independent Gaussians per batch in the plotted, possibly log, space; equal priors).
+  const GX = 72, GY = 54
+  const regions = $derived.by(() => {
+    const spanX = xs[1] - xs[0], spanY = ys[1] - ys[0]
+    const stats = classes
+      .map((c) => {
+        const tx = pts.filter((p) => p.b === c).map((p) => tf(x, p.vx))
+        const ty = pts.filter((p) => p.b === c).map((p) => tf(y, p.vy))
+        if (tx.length < 2) return null
+        const m = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length
+        const sd = (v: number[], mu: number, span: number) =>
+          Math.sqrt(v.reduce((a, b) => a + (b - mu) ** 2, 0) / (v.length - 1) + (0.04 * span) ** 2)
+        const mx = m(tx), my = m(ty)
+        return { c, mx, my, sx: sd(tx, mx, spanX), sy: sd(ty, my, spanY) }
+      })
+      .filter((v) => v !== null)
+    if (!stats.length) return []
+    const cw = (W - M.l - M.r) / GX, ch = (H - M.t - M.b) / GY
+    const out: { x: number; y: number; w: number; h: number; c: string }[] = []
+    for (let j = 0; j < GY; j++) {
+      const ty = ys[1] - ((j + 0.5) / GY) * spanY
+      let run: { x: number; y: number; w: number; h: number; c: string } | null = null
+      for (let i = 0; i < GX; i++) {
+        const tx = xs[0] + ((i + 0.5) / GX) * spanX
+        let best = stats[0].c, bestLl = -Infinity
+        for (const s of stats) {
+          const ll = -0.5 * (((tx - s.mx) / s.sx) ** 2 + ((ty - s.my) / s.sy) ** 2) - Math.log(s.sx * s.sy)
+          if (ll > bestLl) { bestLl = ll; best = s.c }
+        }
+        if (run && run.c === best) run.w += cw
+        else { run = { x: M.l + i * cw, y: M.t + j * ch, w: cw, h: ch, c: best }; out.push(run) }
+      }
+    }
+    return out
+  })
 </script>
 
 <figure class="scatter">
   {#if title}<figcaption>{title}</figcaption>{/if}
   <svg viewBox="0 0 {W} {H}" role="img" aria-label={title}>
     <rect x={M.l} y={M.t} width={W - M.l - M.r} height={H - M.t - M.b} class="plot" />
+    <g opacity="0.16">
+      {#each regions as r}
+        <rect x={r.x} y={r.y} width={r.w + 0.6} height={r.h + 0.6} fill={batchColor(r.c)} shape-rendering="crispEdges" />
+      {/each}
+    </g>
+    <rect x={M.l} y={M.t} width={W - M.l - M.r} height={H - M.t - M.b} class="frame" />
     {#each ticks(x, xs) as t}
       <text x={sx(t)} y={H - M.b + 14} class="tick" text-anchor="middle">{fmtKpi(t, meta[x])}</text>
     {/each}
@@ -75,7 +118,8 @@
   .scatter { margin: 0; }
   figcaption { font-weight: 600; font-size: 0.85rem; margin-bottom: 2px; }
   svg { width: 100%; max-width: 420px; height: auto; }
-  .plot { fill: #fafafa; stroke: #ddd; }
+  .plot { fill: #fafafa; }
+  .frame { fill: none; stroke: #ddd; }
   .tick { font-size: 9px; fill: #555; }
   .axis { font-size: 10.5px; fill: #222; }
   .pointlabel { font-size: 10px; font-weight: 700; fill: #111; }

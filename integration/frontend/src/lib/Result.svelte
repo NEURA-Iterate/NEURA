@@ -13,6 +13,9 @@
 
   // feature tables
   let featSource = $state<Source>('rule')
+  let showAllBaseline = $state(false)
+  const isUsed = (b: { source: Source; kpi: string }) => overview.classifiers[b.source].kpis.includes(b.kpi)
+  const baselineRows = $derived(showAllBaseline ? result.baseline.kpis : result.baseline.kpis.filter(isUsed))
   const used = $derived(new Set(overview.classifiers[featSource].kpis))
   const kpiList = $derived(Object.keys(meta).sort((a, b) => Number(used.has(b)) - Number(used.has(a))))
   const sampleVal = (s: Source, k: string) => (result.kpis[s] as any)?.[k]?.value as number | undefined
@@ -26,10 +29,10 @@
        : { bse: 'bse', rule: 'rule_overlay', learned: 'learned_overlay', cracks: 'cracks' })[p] as keyof Images
 
   const PRESETS: { source: Source; x: string; y: string; title: string }[] = [
-    { source: 'rule', x: 'frac_pore', y: 'graphite_crack_density', title: 'Porosity vs graphite cracks (rule)' },
-    { source: 'rule', x: 'si_cv_w256', y: 'frac_pore', title: 'Si heterogeneity vs porosity (rule)' },
-    { source: 'learned', x: 'frac_pore', y: 'graphite_aspect_ratio_median', title: 'Porosity vs graphite shape (DINO)' },
-    { source: 'learned', x: 'si_cv_w256', y: 'graphite_aspect_ratio_median', title: 'Si heterogeneity vs graphite shape (DINO)' },
+    { source: 'rule', x: 'frac_pore', y: 'graphite_crack_density', title: 'Porosity vs graphite cracks' },
+    { source: 'rule', x: 'si_cv_w256', y: 'frac_pore', title: 'Si heterogeneity vs porosity' },
+    { source: 'learned', x: 'frac_pore', y: 'graphite_aspect_ratio_median', title: 'Porosity vs graphite shape' },
+    { source: 'learned', x: 'si_cv_w256', y: 'graphite_aspect_ratio_median', title: 'Si heterogeneity vs graphite shape' },
   ]
   const KPI_VISUAL: Record<string, { key: keyof Images; caption: string }> = {
     frac_pore: { key: 'kpi_pore', caption: 'Pores shown in blue across the whole image.' },
@@ -48,7 +51,7 @@
       const status = value === undefined || !Number.isFinite(value) ? 'na' : value < st.p25 ? 'below' : value > st.p75 ? 'above' : 'within'
       const v = KPI_VISUAL[k]
       const src = v ? result.images?.[v.key] : undefined
-      return [{ k, label: meta[k].label, value, status, pos, img: src ? { src, caption: v.caption } : null, ...st }]
+      return [{ k, label: meta[k].label, value, status, pos, img: src ? { src, caption: v.caption } : null, noImg: !!v && !src, ...st }]
     }),
   )
   const whyRows = $derived.by(() => {
@@ -66,12 +69,15 @@
       const lo = Math.min(...xs), hi = Math.max(...xs), pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.05 || 1
       const pos = (x: number) => ((x - (lo - pad)) / (hi - lo + 2 * pad)) * 100
       const ll = classes.map((b) => cs.reduce((t, c) => t + (c.per_batch[b] ?? -Infinity), 0))
-      const best = classes[ll.indexOf(Math.max(...ll))]
-      const spread = Math.max(...ll) - Math.min(...ll)
-      return { kpi, label: cs[0].label, value, display: fmtKpi(value, meta[kpi]), batches, pos, best, spread: Number.isFinite(spread) ? spread : 0 }
+      const order = classes.map((b, i) => ({ b, l: ll[i] })).sort((a, b) => b.l - a.l)
+      const best = order[0].b, runnerUp = order[1]?.b
+      // This sample's evidence: log-odds of the favoured batch over the next most compatible one.
+      const margin = order.length > 1 && Number.isFinite(order[0].l - order[1].l) ? order[0].l - order[1].l : 0
+      const strength = margin < 0.25 ? 'slight' : margin < 1 ? 'moderate' : 'strong'
+      return { kpi, label: cs[0].label, value, display: fmtKpi(value, meta[kpi]), batches, pos, best, runnerUp, margin, strength }
     })
-    const top = Math.max(1e-9, ...rows.map((r) => r.spread))
-    return rows.map((r) => ({ ...r, weight: r.spread / top })).sort((a, b) => b.spread - a.spread)
+    const top = Math.max(1, ...rows.map((r) => r.margin))
+    return rows.map((r) => ({ ...r, weight: r.margin / top })).sort((a, b) => b.margin - a.margin)
   })
   const flags = $derived(
     Array.isArray(result.trust_flags) ? result.trust_flags.filter(Boolean) : result.trust_flags ? String(result.trust_flags).split(/[;,\s]+/).filter(Boolean) : [],
@@ -121,6 +127,8 @@
               <a href={r.img.src} target="_blank" rel="noreferrer"><img src={r.img.src} alt={r.img.caption} loading="lazy" /></a>
               <figcaption class="muted small">{r.img.caption}</figcaption>
             </figure>
+          {:else if r.noImg}
+            <p class="muted small">No image for this run: it was classified before images were added (or by a backend that hasn't been restarted). Re-run the sample to see it.</p>
           {/if}
         </div>
       {/each}
@@ -153,15 +161,15 @@
               </span>
               {#if r.best}
                 <span class="wfav" style="background:{batchColor(r.best)}1f; color:{batchColor(r.best)}">
-                  favours {short(r.best)}
-                  <span class="wweight"><span style="width:{r.weight * 100}%; background:{batchColor(r.best)}"></span></span>
+                  favours {short(r.best)} · {r.strength}
+                  <span class="wweight" title="{Math.exp(r.margin).toFixed(1)}× more likely under {short(r.best)} than {r.runnerUp ? short(r.runnerUp) : ''}"><span style="width:{Math.max(4, r.weight * 100)}%; background:{batchColor(r.best)}"></span></span>
                 </span>
               {/if}
             </div>
           </div>
         {/each}
       </div>
-      <p class="muted small">Black dot: this sample. Coloured bands: middle 50% of each batch's training samples, tick: its median. "Favours" names the batch this measurement fits best; the small bar shows how strongly it separates the batches.</p>
+      <p class="muted small">Black dot: this sample. Coloured bands: middle 50% of each batch's training samples, tick: its median. "Favours" names the batch this sample's value fits best; the bar shows how strongly (vs the next-best batch), so overlapping bands give a short bar.</p>
     </section>
   <section class="card">
     <h2>Where the sample sits</h2>
@@ -171,6 +179,7 @@
           point={{ x: sampleVal(p.source, p.x) ?? NaN, y: sampleVal(p.source, p.y) ?? NaN, label: 'this sample' }} />
       {/each}
     </div>
+    <p class="muted small">Shaded regions: the batch that is most likely at each point, judging by the two plotted measurements only.</p>
   </section>
   </div>
 </div>
@@ -188,8 +197,8 @@
   <div class="tscroll"><table>
     <thead><tr><th>KPI</th><th>Masks</th><th class="num">Sample</th><th class="num">B3 median</th><th class="num">B3 5–95%</th><th>Deviation (z)</th><th class="num">B3 percentile</th></tr></thead>
     <tbody>
-      {#each result.baseline.kpis as b}
-        <tr class:used={overview.classifiers[b.source].kpis.includes(b.kpi)}>
+      {#each baselineRows as b}
+        <tr class:used={showAllBaseline && isUsed(b)}>
           <td>{b.label}</td><td class="muted">{b.source === 'rule' ? 'rule' : 'DINO'}</td>
           <td class="num">{fmtKpi(b.value, meta[b.kpi])}</td><td class="num">{fmtKpi(b.median, meta[b.kpi])}</td>
           <td class="num">{fmtKpi(b.p05, meta[b.kpi])} – {fmtKpi(b.p95, meta[b.kpi])}</td>
@@ -200,7 +209,12 @@
       {/each}
     </tbody>
   </table></div>
-  <p class="muted small">Bold rows are KPIs the classifiers use. z on the log/logit scale; |z| &lt; 1 counts as typical.</p>
+  <div class="btoggle">
+    <button onclick={() => (showAllBaseline = !showAllBaseline)}>
+      {showAllBaseline ? 'Show only classifier KPIs' : `Show all ${result.baseline.kpis.length} measurements`}
+    </button>
+    <span class="muted small">{showAllBaseline ? 'Bold rows are KPIs the classifiers use. ' : ''}z on the log/logit scale; |z| &lt; 1 counts as typical.</span>
+  </div>
 </section>
 
 <section class="card">
@@ -296,6 +310,7 @@
   .small { font-size: 0.78rem; }
   .why { display: grid; gap: 18px; margin: 12px 0; }
   .wrow { display: grid; gap: 6px; }
+  .btoggle { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
   .whead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
   .wlab { font-weight: 500; }
   .wval { font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
