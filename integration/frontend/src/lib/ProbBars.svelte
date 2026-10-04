@@ -26,16 +26,19 @@
 </div>
 
 <style>
-  .bars { display: grid; gap: 6px; }
-  .row { display: grid; grid-template-columns: 72px 1fr 110px; align-items: center; gap: 8px; }
+  .bars { display: grid; gap: 12px; }
+  .row { display: grid; grid-template-columns: 90px 1fr 140px; align-items: center; gap: 12px; }
   .compact .row { grid-template-columns: 26px 1fr 40px; gap: 5px; }
-  .name { font-size: 0.85rem; }
-  .track { position: relative; height: 18px; background: #eee; border-radius: 3px; overflow: hidden; }
+  .name { font-size: 1.1rem; font-weight: 500; }
+  .compact .name { font-size: 0.85rem; font-weight: 400; }
+  .track { position: relative; height: 24px; background: #eee; border-radius: 6px; overflow: hidden; }
   .compact .track { height: 10px; }
   .fill { height: 100%; }
   .ci { position: absolute; top: 40%; height: 20%; background: #111; opacity: 0.75; }
   .ci::before, .ci::after { content: ''; position: absolute; top: -150%; height: 400%; width: 2px; background: #111; }
   .ci::before { left: 0; } .ci::after { right: 0; }
-  .val { font-variant-numeric: tabular-nums; font-size: 0.85rem; }
-  .val small { color: #666; }
+  .val { font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 600; white-space: nowrap; }
+  .val small { color: #666; font-size: 0.95rem; font-weight: 500; }
+  .compact .val { font-size: 0.85rem; font-weight: 400; }
+  @media (max-width: 600px) { .row { grid-template-columns: 70px 1fr 118px; gap: 8px; } .name { font-size: 1rem; } .val { font-size: 1.1rem; } .val small { font-size: 0.85rem; } }
 </style>
