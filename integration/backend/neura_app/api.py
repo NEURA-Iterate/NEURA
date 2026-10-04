@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import re
@@ -8,8 +10,9 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -17,7 +20,7 @@ import tifffile
 from anode_qc.data import BSEImage, find_bse_images
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -43,6 +46,35 @@ FIGURES_DIR = (
     / "figures"
 )
 _SAFE_SAMPLE_ID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+_JOB_ID = re.compile(r"^[0-9a-f]{32}$")
+_INTERRUPTED_ERROR = "Interrupted: the server restarted before this job finished."
+_JOB_JSON_FIELDS = (
+    "job_id",
+    "sample_id",
+    "known_batch",
+    "source",
+    "created_at",
+    "status",
+    "step",
+    "error",
+)
+_HISTORY_CSV_FIELDS = [
+    "job_id",
+    "created_at",
+    "sample_id",
+    "source",
+    "known_batch",
+    "status",
+    "predicted",
+    *(f"P_{batch}" for batch in BATCHES),
+    *(column for batch in BATCHES for column in (f"P_{batch}_lo", f"P_{batch}_hi")),
+    "tier",
+    "ambiguous",
+    "outlier",
+    "trust_flags",
+    *(f"rule_P_{batch}" for batch in BATCHES),
+    *(f"learned_P_{batch}" for batch in BATCHES),
+]
 
 
 class DemoRequest(BaseModel):
@@ -58,6 +90,127 @@ def _number(value: Any) -> float | None:
 
 def _text(value: Any) -> str:
     return "" if value is None or pd.isna(value) else str(value)
+
+
+def _utc_iso(timestamp: float | None = None) -> str:
+    value = (
+        datetime.fromtimestamp(timestamp, timezone.utc)
+        if timestamp is not None
+        else datetime.now(timezone.utc)
+    )
+    return value.isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+    temporary_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temporary_path.write_text(
+            json.dumps(value, indent=2, allow_nan=False) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def _persist_job_record(job_dir: Path, state: dict[str, Any]) -> None:
+    _write_json_atomic(
+        job_dir / "job.json",
+        {field: state.get(field) for field in _JOB_JSON_FIELDS},
+    )
+
+
+def _read_disk_job(jobs_dir: Path, job_id: str) -> dict[str, Any] | None:
+    job_dir = jobs_dir / job_id
+    job_path = job_dir / "job.json"
+    result_path = job_dir / "result.json"
+    if job_path.is_file():
+        metadata = json.loads(job_path.read_text(encoding="utf-8"))
+        status = metadata.get("status", "error")
+        state = {
+            "job_id": job_id,
+            "sample_id": metadata.get("sample_id"),
+            "known_batch": metadata.get("known_batch"),
+            "source": metadata.get("source"),
+            "created_at": metadata.get("created_at") or _utc_iso(job_path.stat().st_mtime),
+            "status": status,
+            "step": metadata.get("step", status),
+            "progress": 1.0 if status in {"done", "error"} else 0.0,
+            "error": metadata.get("error"),
+            "result": None,
+        }
+        if status in {"queued", "running"}:
+            state.update(status="error", step="error", progress=1.0, error=_INTERRUPTED_ERROR)
+            _persist_job_record(job_dir, state)
+        elif status == "done":
+            if result_path.is_file():
+                state["result"] = json.loads(result_path.read_text(encoding="utf-8"))
+            else:
+                state.update(
+                    status="error",
+                    step="error",
+                    progress=1.0,
+                    error="Completed job result is missing.",
+                )
+                _persist_job_record(job_dir, state)
+        elif status != "error":
+            state.update(status="error", step="error", progress=1.0, error="Invalid job status.")
+            _persist_job_record(job_dir, state)
+        return state
+
+    if not result_path.is_file():
+        return None
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    known_batch = result.get("known_batch")
+    return {
+        "job_id": job_id,
+        "sample_id": result.get("sample_id"),
+        "known_batch": known_batch,
+        "source": "demo" if known_batch is not None else "upload",
+        "created_at": _utc_iso(result_path.stat().st_mtime),
+        "status": "done",
+        "step": "done",
+        "progress": 1.0,
+        "error": None,
+        "result": result,
+    }
+
+
+def _job_response(state: dict[str, Any]) -> dict[str, Any]:
+    response = {
+        "status": state["status"],
+        "step": state["step"],
+        "progress": state["progress"],
+        "sample_id": state.get("sample_id"),
+        "created_at": state.get("created_at"),
+    }
+    if state.get("result") is not None:
+        response["result"] = state["result"]
+    if state.get("error") is not None:
+        response["error"] = state["error"]
+    return response
+
+
+def _history_item(state: dict[str, Any]) -> dict[str, Any]:
+    result = state.get("result")
+    prediction = result.get("prediction") if isinstance(result, dict) else None
+    prediction = prediction if isinstance(prediction, dict) else {}
+    return {
+        "job_id": state["job_id"],
+        "sample_id": state.get("sample_id"),
+        "known_batch": state.get("known_batch"),
+        "source": state.get("source"),
+        "created_at": state.get("created_at"),
+        "status": state["status"],
+        "error": state.get("error"),
+        "predicted": prediction.get("predicted"),
+        "probabilities": prediction.get("probabilities"),
+        "interval": prediction.get("interval"),
+        "tier": prediction.get("tier"),
+        "ambiguous": prediction.get("ambiguous"),
+        "outlier": prediction.get("outlier"),
+        "trust_flags": result.get("trust_flags") if isinstance(result, dict) else None,
+    }
 
 
 def _read_representatives(artifacts_dir: Path) -> dict[str, dict[str, Any]]:
@@ -288,7 +441,10 @@ def create_app(
         if application.state.pipeline is None:
             rule_table = pd.read_csv(artifacts_path / "rule_per_image.csv")
             learned_table = pd.read_csv(artifacts_path / "learned_per_image.csv")
-            cache_dir = Path("/home/ubuntu/data/runs/final")
+            cache_dir = Path(
+                os.environ.get("NEURA_CACHE_DIR", str(jobs_path.parent / "cache"))
+            )
+            cache_dir.mkdir(parents=True, exist_ok=True)
             classifier = DualSourceClassifier(
                 rule_table,
                 learned_table,
@@ -299,7 +455,7 @@ def create_app(
             application.state.pipeline = InferencePipeline(
                 classifier,
                 artifacts_path / "fusion_holdout25.pt",
-                Path("/home/ubuntu/data/features/meta.json"),
+                artifacts_path / "dino_meta.json",
             )
         yield
         application.state.executor.shutdown(wait=False, cancel_futures=False)
@@ -332,9 +488,13 @@ def create_app(
             state = app.state.jobs[job_id]
             state.update(step=step, progress=max(0.0, min(float(progress), 1.0)))
 
-    def run_job(job_id: str, image: BSEImage, sample_id: str, known_batch: str | None) -> None:
+    def run_job(job_id: str, image: BSEImage) -> None:
         with app.state.jobs_lock:
-            app.state.jobs[job_id].update(status="running", step="starting", progress=0.01)
+            state = app.state.jobs[job_id]
+            state.update(status="running", step="starting", progress=0.01, error=None)
+            _persist_job_record(jobs_path / job_id, state)
+            sample_id = state["sample_id"]
+            known_batch = state["known_batch"]
         try:
             result = app.state.pipeline.run(
                 image=image,
@@ -346,32 +506,78 @@ def create_app(
             )
             result["sample_id"] = sample_id
             result["known_batch"] = known_batch
+            _write_json_atomic(jobs_path / job_id / "result.json", result)
             with app.state.jobs_lock:
-                app.state.jobs[job_id].update(
+                state = app.state.jobs[job_id]
+                state.update(
                     status="done",
                     step="done",
                     progress=1.0,
                     result=result,
                 )
+                _persist_job_record(jobs_path / job_id, state)
         except Exception as error:  # noqa: BLE001
             with app.state.jobs_lock:
-                app.state.jobs[job_id].update(
+                state = app.state.jobs[job_id]
+                state.update(
                     status="error",
                     step="error",
                     progress=1.0,
                     error=str(error),
                 )
+                _persist_job_record(jobs_path / job_id, state)
 
-    def enqueue(image: BSEImage, sample_id: str, known_batch: str | None) -> str:
-        job_id = uuid.uuid4().hex
+    def enqueue(
+        image: BSEImage,
+        job_id: str,
+        sample_id: str,
+        known_batch: str | None,
+        source: Literal["upload", "demo"],
+    ) -> str:
+        job_dir = jobs_path / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        state = {
+            "job_id": job_id,
+            "sample_id": sample_id,
+            "known_batch": known_batch,
+            "source": source,
+            "created_at": _utc_iso(),
+            "status": "queued",
+            "step": "queued",
+            "progress": 0.0,
+            "error": None,
+            "result": None,
+        }
         with app.state.jobs_lock:
-            app.state.jobs[job_id] = {
-                "status": "queued",
-                "step": "queued",
-                "progress": 0.0,
-            }
-        app.state.executor.submit(run_job, job_id, image, sample_id, known_batch)
+            app.state.jobs[job_id] = state
+            _persist_job_record(job_dir, state)
+        app.state.executor.submit(run_job, job_id, image)
         return job_id
+
+    def history_records() -> list[dict[str, Any]]:
+        with app.state.jobs_lock:
+            records = {
+                job_id: dict(state) for job_id, state in app.state.jobs.items()
+            }
+        for job_dir in jobs_path.iterdir():
+            job_id = job_dir.name
+            if (
+                not job_dir.is_dir()
+                or not _JOB_ID.fullmatch(job_id)
+                or job_id in records
+            ):
+                continue
+            try:
+                state = _read_disk_job(jobs_path, job_id)
+            except (OSError, ValueError, KeyError):
+                continue
+            if state is not None:
+                records[job_id] = state
+        return sorted(
+            records.values(),
+            key=lambda state: state.get("created_at") or "",
+            reverse=True,
+        )
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
@@ -418,13 +624,7 @@ def create_app(
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         image = BSEImage(chosen_id, "Uploaded", bse_path)
-        with app.state.jobs_lock:
-            app.state.jobs[job_id] = {
-                "status": "queued",
-                "step": "queued",
-                "progress": 0.0,
-            }
-        app.state.executor.submit(run_job, job_id, image, chosen_id, None)
+        enqueue(image, job_id, chosen_id, None, "upload")
         return {"job_id": job_id}
 
     @app.post("/api/classify-demo")
@@ -433,7 +633,8 @@ def create_app(
         image = samples.get(request.image_id)
         if image is None:
             raise HTTPException(status_code=404, detail=f"Sample {request.image_id!r} was not found")
-        return {"job_id": enqueue(image, image.image_id, image.batch)}
+        job_id = uuid.uuid4().hex
+        return {"job_id": enqueue(image, job_id, image.image_id, image.batch, "demo")}
 
     @app.get("/api/demo-samples")
     def demo_samples() -> list[dict[str, str]]:
@@ -444,11 +645,61 @@ def create_app(
 
     @app.get("/api/jobs/{job_id}")
     def get_job(job_id: str) -> dict[str, Any]:
+        if not _JOB_ID.fullmatch(job_id):
+            raise HTTPException(status_code=404, detail="Job not found")
         with app.state.jobs_lock:
             state = app.state.jobs.get(job_id)
-            if state is None:
-                raise HTTPException(status_code=404, detail="Job not found")
-            return dict(state)
+            state = dict(state) if state is not None else None
+        if state is None:
+            try:
+                state = _read_disk_job(jobs_path, job_id)
+            except (OSError, ValueError, KeyError) as error:
+                raise HTTPException(status_code=404, detail="Job not found") from error
+        if state is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return _job_response(state)
+
+    @app.get("/api/history")
+    def history() -> list[dict[str, Any]]:
+        return [_history_item(state) for state in history_records()]
+
+    @app.get("/api/history.csv")
+    def history_csv() -> Response:
+        stream = io.StringIO(newline="")
+        writer = csv.DictWriter(stream, fieldnames=_HISTORY_CSV_FIELDS)
+        writer.writeheader()
+        for state in history_records():
+            result = state.get("result")
+            result = result if isinstance(result, dict) else {}
+            prediction = result.get("prediction")
+            prediction = prediction if isinstance(prediction, dict) else {}
+            probabilities = prediction.get("probabilities") or {}
+            intervals = prediction.get("interval") or {}
+            classifiers = result.get("classifiers") or {}
+            row = {
+                **{field: state.get(field) for field in _HISTORY_CSV_FIELDS[:6]},
+                "predicted": prediction.get("predicted"),
+                "tier": prediction.get("tier"),
+                "ambiguous": prediction.get("ambiguous"),
+                "outlier": prediction.get("outlier"),
+                "trust_flags": result.get("trust_flags"),
+            }
+            for batch in BATCHES:
+                row[f"P_{batch}"] = probabilities.get(batch)
+                interval = intervals.get(batch)
+                row[f"P_{batch}_lo"] = interval[0] if interval else None
+                row[f"P_{batch}_hi"] = interval[1] if interval else None
+                for source in ("rule", "learned"):
+                    source_probabilities = (
+                        classifiers.get(source, {}).get("probabilities") or {}
+                    )
+                    row[f"{source}_P_{batch}"] = source_probabilities.get(batch)
+            writer.writerow(row)
+        return Response(
+            content=stream.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=neura_history.csv"},
+        )
 
     @app.get("/api/files/{asset_path:path}")
     def files(asset_path: str) -> FileResponse:

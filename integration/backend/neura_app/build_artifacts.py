@@ -23,6 +23,7 @@ DEFAULT_ARTIFACTS = REPO_ROOT / "integration" / "artifacts"
 DEFAULT_CHECKPOINT = Path("/home/ubuntu/data/runs/holdout/fusion/model.pt")
 DEFAULT_METRICS = Path("/home/ubuntu/data/runs/holdout/fusion/metrics.json")
 DEFAULT_IMAGES = Path("/home/ubuntu/data/neura")
+DEFAULT_DINO_META = Path("/home/ubuntu/data/features/meta.json")
 DEFAULT_PREDICTIONS = Path("/home/ubuntu/data/runs/holdout/predict_all")
 DEFAULT_RULE_TABLE = REPO_ROOT / "anode_microstructure_qc" / "results" / "kpis" / "per_image.csv"
 DEFAULT_LEARNED_TABLE = (
@@ -156,6 +157,7 @@ def build_artifacts(
     checkpoint_path: Path = DEFAULT_CHECKPOINT,
     metrics_path: Path = DEFAULT_METRICS,
     images_dir: Path = DEFAULT_IMAGES,
+    dino_meta_path: Path = DEFAULT_DINO_META,
     predictions_dir: Path = DEFAULT_PREDICTIONS,
     rule_table_path: Path = DEFAULT_RULE_TABLE,
     learned_table_path: Path = DEFAULT_LEARNED_TABLE,
@@ -181,6 +183,7 @@ def build_artifacts(
         raise ValueError("Rule and learned KPI tables must contain the same samples")
 
     shutil.copy2(checkpoint_path, artifacts_dir / "fusion_holdout25.pt")
+    shutil.copy2(dino_meta_path, artifacts_dir / "dino_meta.json")
     shutil.copy2(rule_table_path, artifacts_dir / "rule_per_image.csv")
     shutil.copy2(learned_table_path, artifacts_dir / "learned_per_image.csv")
     representatives, representative_seconds = _make_representatives(
@@ -257,6 +260,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
     parser.add_argument("--metrics", type=Path, default=DEFAULT_METRICS)
     parser.add_argument("--images", type=Path, default=DEFAULT_IMAGES)
+    parser.add_argument("--dino-meta", type=Path, default=DEFAULT_DINO_META)
     parser.add_argument("--pred-dir", type=Path, default=DEFAULT_PREDICTIONS)
     parser.add_argument("--rule-table", type=Path, default=DEFAULT_RULE_TABLE)
     parser.add_argument("--learned-table", type=Path, default=DEFAULT_LEARNED_TABLE)
@@ -266,6 +270,7 @@ def main() -> None:
         checkpoint_path=args.checkpoint,
         metrics_path=args.metrics,
         images_dir=args.images,
+        dino_meta_path=args.dino_meta,
         predictions_dir=args.pred_dir,
         rule_table_path=args.rule_table,
         learned_table_path=args.learned_table,

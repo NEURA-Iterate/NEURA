@@ -18,3 +18,16 @@ cd integration/frontend
 npm install
 npm run dev
 ```
+
+## Run it in a Devin session
+
+From the repository root, run `bash integration/run.sh`. The launcher builds the frontend and serves both the UI and API on port 8000 by default (`PORT` overrides it). DINOv2 weights are fetched from Hugging Face on first use. If the private sample dataset is missing, set `HF_TOKEN` to allow its download; the token is not printed.
+
+| Environment variable | Default |
+| --- | --- |
+| `NEURA_DATA_DIR` | `/home/ubuntu/data/neura` |
+| `NEURA_JOBS_DIR` | `/home/ubuntu/data/runs/app_jobs` |
+| `NEURA_CACHE_DIR` | `<parent of NEURA_JOBS_DIR>/cache` |
+| `PORT` | `8000` |
+
+The History tab shows saved classifications; export the same history with `GET /api/history.csv`.

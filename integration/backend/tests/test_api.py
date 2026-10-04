@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import io
+import json
 import threading
 import time
 from pathlib import Path
@@ -27,10 +29,28 @@ class StubPipeline:
     ) -> dict[str, Any]:
         if progress is not None:
             progress("stub inference", 0.8)
+        probabilities = {"Batch_1": 0.8, "Batch_2": 0.15, "Batch_3": 0.05}
         return {
             "sample_id": sample_id,
             "known_batch": known_batch,
             "timings": {"stub": 0.01},
+            "trust_flags": "test_flag",
+            "prediction": {
+                "predicted": "Batch_1",
+                "probabilities": probabilities,
+                "interval": {
+                    "Batch_1": [0.7, 0.9],
+                    "Batch_2": [0.08, 0.22],
+                    "Batch_3": [0.01, 0.09],
+                },
+                "tier": "high",
+                "ambiguous": False,
+                "outlier": False,
+            },
+            "classifiers": {
+                "rule": {"probabilities": probabilities},
+                "learned": {"probabilities": probabilities},
+            },
         }
 
 
@@ -115,18 +135,22 @@ def _write_overview_data(root: Path) -> tuple[Path, Path, Path, Path]:
     )
 
     sample_dir = data_dir / "Batch_1"
-    sample_dir.mkdir(parents=True)
+    sample_dir.mkdir(parents=True, exist_ok=True)
     for suffix in ("BSE", "ETD", "Inlens"):
         tifffile.imwrite(sample_dir / f"demo_{suffix}.tif", np.full((16, 20), 100, dtype=np.uint8))
     return artifacts, validation, figures, data_dir
 
 
-def _app(tmp_path: Path, pipeline: Any | None = None):
+def _app(
+    tmp_path: Path,
+    pipeline: Any | None = None,
+    jobs_dir: Path | None = None,
+):
     artifacts, validation, figures, data_dir = _write_overview_data(tmp_path)
     app = create_app(
         pipeline=pipeline or StubPipeline(),
         data_dir=data_dir,
-        jobs_dir=tmp_path / "jobs",
+        jobs_dir=jobs_dir or tmp_path / "jobs",
         artifacts_dir=artifacts,
         validation_dir=validation,
         figures_dir=figures,
@@ -235,3 +259,154 @@ def test_upload_validation_rejects_missing_and_mismatched_detectors(tmp_path: Pa
         )
     assert mismatch.status_code == 422
     assert "Detector shape mismatch" in mismatch.json()["detail"]
+
+
+def test_job_history_survives_app_restart(tmp_path: Path) -> None:
+    jobs_dir = tmp_path / "persistent-jobs"
+    with TestClient(_app(tmp_path, jobs_dir=jobs_dir)) as client:
+        response = client.post("/api/classify-demo", json={"image_id": "demo"})
+        assert response.status_code == 200
+        job_id = response.json()["job_id"]
+        first_state = _wait_for_job(client, job_id)
+        assert first_state["status"] == "done"
+
+    job_metadata = json.loads((jobs_dir / job_id / "job.json").read_text())
+    assert job_metadata["source"] == "demo"
+    assert job_metadata["status"] == "done"
+
+    with TestClient(_app(tmp_path, jobs_dir=jobs_dir)) as client:
+        restored = client.get(f"/api/jobs/{job_id}").json()
+        assert restored["status"] == "done"
+        assert restored["result"]["sample_id"] == "demo"
+        assert restored["sample_id"] == "demo"
+        history = client.get("/api/history").json()
+    assert len(history) == 1
+    assert history[0]["sample_id"] == "demo"
+    assert history[0]["source"] == "demo"
+    assert history[0]["predicted"] == "Batch_1"
+
+
+def test_history_csv_has_expected_header_and_completed_upload(tmp_path: Path) -> None:
+    with TestClient(_app(tmp_path)) as client:
+        response = client.post(
+            "/api/classify",
+            data={"sample_id": "sample-csv"},
+            files=_upload_files(),
+        )
+        job_id = response.json()["job_id"]
+        assert _wait_for_job(client, job_id)["status"] == "done"
+        history_csv = client.get("/api/history.csv")
+
+    assert history_csv.status_code == 200
+    assert history_csv.headers["content-disposition"] == (
+        "attachment; filename=neura_history.csv"
+    )
+    reader = csv.DictReader(io.StringIO(history_csv.text))
+    assert reader.fieldnames == [
+        "job_id",
+        "created_at",
+        "sample_id",
+        "source",
+        "known_batch",
+        "status",
+        "predicted",
+        "P_Batch_1",
+        "P_Batch_2",
+        "P_Batch_3",
+        "P_Batch_1_lo",
+        "P_Batch_1_hi",
+        "P_Batch_2_lo",
+        "P_Batch_2_hi",
+        "P_Batch_3_lo",
+        "P_Batch_3_hi",
+        "tier",
+        "ambiguous",
+        "outlier",
+        "trust_flags",
+        "rule_P_Batch_1",
+        "rule_P_Batch_2",
+        "rule_P_Batch_3",
+        "learned_P_Batch_1",
+        "learned_P_Batch_2",
+        "learned_P_Batch_3",
+    ]
+    rows = list(reader)
+    assert len(rows) == 1
+    assert rows[0]["sample_id"] == "sample-csv"
+    assert rows[0]["source"] == "upload"
+    assert rows[0]["P_Batch_1"] == "0.8"
+    assert rows[0]["P_Batch_1_lo"] == "0.7"
+    assert rows[0]["rule_P_Batch_1"] == "0.8"
+    assert rows[0]["learned_P_Batch_3"] == "0.05"
+
+
+def test_job_route_rejects_invalid_job_ids(tmp_path: Path) -> None:
+    with TestClient(_app(tmp_path)) as client:
+        assert client.get("/api/jobs/not-hex").status_code == 404
+        assert client.get("/api/jobs/..%2Fx").status_code == 404
+
+
+def test_interrupted_job_is_reported_after_restart(tmp_path: Path) -> None:
+    jobs_dir = tmp_path / "interrupted-jobs"
+    job_id = "f" * 32
+    job_dir = jobs_dir / job_id
+    job_dir.mkdir(parents=True)
+    (job_dir / "job.json").write_text(
+        json.dumps(
+            {
+                "job_id": job_id,
+                "sample_id": "interrupted-sample",
+                "known_batch": None,
+                "source": "upload",
+                "created_at": "2025-01-01T00:00:00Z",
+                "status": "running",
+                "step": "classifying",
+                "error": None,
+            }
+        )
+    )
+    with TestClient(_app(tmp_path, jobs_dir=jobs_dir)) as client:
+        response = client.get(f"/api/jobs/{job_id}")
+        history = client.get("/api/history").json()
+    assert response.status_code == 200
+    assert response.json()["status"] == "error"
+    assert response.json()["error"] == (
+        "Interrupted: the server restarted before this job finished."
+    )
+    assert history[0]["status"] == "error"
+    assert history[0]["sample_id"] == "interrupted-sample"
+    assert all(
+        history[0][field] is None
+        for field in (
+            "predicted",
+            "probabilities",
+            "interval",
+            "tier",
+            "ambiguous",
+            "outlier",
+        )
+    )
+
+
+def test_legacy_result_only_job_is_in_history(tmp_path: Path) -> None:
+    jobs_dir = tmp_path / "legacy-jobs"
+    job_id = "a" * 32
+    job_dir = jobs_dir / job_id
+    job_dir.mkdir(parents=True)
+    result = StubPipeline().run(
+        image=None,
+        sample_id="legacy-sample",
+        job_dir=job_dir,
+        job_id=job_id,
+        known_batch="Batch_2",
+    )
+    (job_dir / "result.json").write_text(json.dumps(result))
+
+    with TestClient(_app(tmp_path, jobs_dir=jobs_dir)) as client:
+        history = client.get("/api/history").json()
+    assert len(history) == 1
+    assert history[0]["job_id"] == job_id
+    assert history[0]["sample_id"] == "legacy-sample"
+    assert history[0]["known_batch"] == "Batch_2"
+    assert history[0]["source"] == "demo"
+    assert history[0]["status"] == "done"

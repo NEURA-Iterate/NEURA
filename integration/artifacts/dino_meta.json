@@ -1,0 +1,14 @@
+{
+  "model_id": "facebook/dinov2-small",
+  "upsample": 1,
+  "tile": 518,
+  "overlap": 56,
+  "batch_size": 8,
+  "channels": 384,
+  "patch_size": 14,
+  "normalisation": {
+    "input": "per-channel 1st/99th percentile to [0,1]",
+    "backbone": "ImageNet mean/std (0.485,0.456,0.406)/(0.229,0.224,0.225)"
+  },
+  "feature_layout": "HWC float16"
+}

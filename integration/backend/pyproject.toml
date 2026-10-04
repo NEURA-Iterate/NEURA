@@ -9,6 +9,7 @@ description = "FastAPI backend for interpretable SEM batch classification"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110",
+    "huggingface-hub>=0.20",
     "httpx>=0.27",
     "matplotlib>=3.7",
     "numpy>=1.24",
