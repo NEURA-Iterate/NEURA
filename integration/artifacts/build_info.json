@@ -1,0 +1,57 @@
+{
+  "commit": "34bf9df7020713aad1a6408a6f3140678726186a",
+  "decoder": {
+    "artifact": "fusion_holdout25.pt",
+    "source": "/home/ubuntu/data/runs/holdout/fusion/model.pt",
+    "description": "Validated 25-sample holdout Fusion decoder, reused without retraining.",
+    "train_samples": 25,
+    "validation_samples": 3,
+    "test_samples": 3,
+    "epochs": 15,
+    "best_epoch": 14
+  },
+  "classifiers": {
+    "fit_samples": 31,
+    "covariance": "diag",
+    "bootstrap_replicates": 200,
+    "seed": 0,
+    "kpis": {
+      "rule": [
+        "frac_pore",
+        "graphite_crack_density",
+        "si_cv_w256"
+      ],
+      "learned": [
+        "frac_pore",
+        "graphite_aspect_ratio_median",
+        "si_cv_w256"
+      ]
+    },
+    "in_sample_correct": 29,
+    "in_sample_n": 31
+  },
+  "kpi_lists": {
+    "rule": [
+      "frac_pore",
+      "graphite_crack_density",
+      "si_cv_w256"
+    ],
+    "learned": [
+      "frac_pore",
+      "graphite_aspect_ratio_median",
+      "si_cv_w256"
+    ]
+  },
+  "representatives": {
+    "Batch_1": "img_uhdslk0o",
+    "Batch_2": "img_rxax5ozo",
+    "Batch_3": "img_pl8uabbv"
+  },
+  "timings_seconds": {
+    "holdout_fusion_training": 683.538,
+    "feature_extraction_all_samples": 706.85,
+    "full_resolution_predictions_all_samples": 906.386,
+    "representative_panels_and_fit": 64.78697116700005,
+    "artifact_assembly": 64.89995720700017
+  }
+}

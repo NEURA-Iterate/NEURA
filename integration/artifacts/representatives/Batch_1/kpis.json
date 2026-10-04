@@ -1,0 +1,60 @@
+{
+  "image_id": "img_uhdslk0o",
+  "batch": "Batch_1",
+  "kpis": {
+    "rule": {
+      "frac_pore": 0.1148125611833018,
+      "graphite_crack_density": 43.952830163385066,
+      "graphite_aspect_ratio_median": 1.6296811848900206,
+      "si_contact_graphite": 0.7539404741453358,
+      "si_fraction_of_solids": 0.0657679241023068,
+      "si_ecd_d50": 37.0823233942262,
+      "si_ecd_d90": 169.6888691228323,
+      "si_cv_w256": 1.910883663217656,
+      "si_crack_density": 12.773732180905364,
+      "si_dispersion_index_w512": 1.095847611732013,
+      "cbd_fraction_of_solids": 0.0995345956265296,
+      "graphite_alignment": 0.1207262077740498
+    },
+    "learned": {
+      "frac_pore": 0.099034812460608,
+      "graphite_crack_density": 31.62713946623021,
+      "graphite_aspect_ratio_median": 1.6538161819323811,
+      "si_contact_graphite": 0.2035734715165382,
+      "si_fraction_of_solids": 0.0645206302664064,
+      "si_ecd_d50": 34.758479046433585,
+      "si_ecd_d90": 168.86322730278746,
+      "si_cv_w256": 1.9176345048613248,
+      "si_crack_density": 8.80805517617421,
+      "si_dispersion_index_w512": 1.1256674941906926,
+      "cbd_fraction_of_solids": 0.1179531276612694,
+      "graphite_alignment": 0.1278256102660325
+    }
+  },
+  "legend": {
+    "si": {
+      "label": "Si",
+      "color": "#ff8c00"
+    },
+    "graphite": {
+      "label": "Graphite",
+      "color": "#59636e"
+    },
+    "pore": {
+      "label": "Pore",
+      "color": "#1e3cff"
+    },
+    "binder": {
+      "label": "Binder",
+      "color": "#28c828"
+    },
+    "gap": {
+      "label": "Gap",
+      "color": "#ff00ff"
+    },
+    "crack": {
+      "label": "Crack",
+      "color": "#ff3030"
+    }
+  }
+}
