@@ -1,4 +1,4 @@
-import type { Job, Overview } from './types'
+import type { HistoryItem, Job, Overview } from './types'
 
 async function json<T>(r: Response): Promise<T> {
   if (!r.ok) {
@@ -29,3 +29,5 @@ export const classifyDemo = (image_id: string) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image_id }),
   }).then((r) => json<{ job_id: string }>(r))
+
+export const getHistory = () => fetch('/api/history').then((r) => json<HistoryItem[]>(r))

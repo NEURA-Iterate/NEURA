@@ -40,6 +40,8 @@
     timer = setInterval(async () => {
       try {
         job = await getJob(id)
+        const url = new URL(location.href)
+        if (url.searchParams.get('job') !== id) { url.searchParams.set('job', id); history.replaceState(null, '', url) }
         if (job.status === 'done' || job.status === 'error') { clearInterval(timer!); timer = null }
       } catch (e) { error = (e as Error).message; clearInterval(timer!); timer = null }
     }, 1500)
@@ -89,6 +91,9 @@
   </section>
 
   {#if job?.status === 'done' && job.result}
+    {#if job.created_at}
+      <p class="muted saved">Saved run from {new Date(job.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}. Find all past runs in the History tab.</p>
+    {/if}
     <Result result={job.result} {overview} />
   {/if}
 </div>
@@ -100,6 +105,7 @@
   .upload .multi { grid-column: 1 / -1; font-weight: 400; }
   .demo { margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .progress { margin-top: 14px; display: grid; gap: 4px; }
+  .saved { margin: -4px 0 0; font-size: 0.82rem; }
   .pbar { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
   .pbar div { height: 100%; background: #1f5fbf; transition: width 0.5s; }
 </style>

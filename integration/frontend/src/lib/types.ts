@@ -77,4 +77,13 @@ export interface Result {
 export interface Job {
   status: 'queued' | 'running' | 'done' | 'error'
   step: string; progress: number; result?: Result; error?: string
+  sample_id?: string; created_at?: string
+}
+
+export interface HistoryItem {
+  job_id: string; sample_id: string; known_batch: string | null; source: 'upload' | 'demo'
+  created_at: string; status: Job['status']; error: string | null
+  predicted: string | null; probabilities: Record<string, number> | null
+  interval: Record<string, [number, number]> | null
+  tier: string | null; ambiguous: boolean | null; outlier: boolean | null; trust_flags: string | null
 }

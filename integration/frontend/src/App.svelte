@@ -4,8 +4,9 @@
   import type { Overview as OverviewT } from './lib/types'
   import Overview from './lib/Overview.svelte'
   import Classify from './lib/Classify.svelte'
+  import History from './lib/History.svelte'
 
-  let tab = $state<'classify' | 'overview'>('classify')
+  let tab = $state<'classify' | 'history' | 'overview'>('classify')
   let overview = $state<OverviewT | null>(null)
   let error = $state<string | null>(null)
 
@@ -20,6 +21,7 @@
   </div>
   <nav>
     <button class:active={tab === 'classify'} onclick={() => (tab = 'classify')}>Classify a sample</button>
+    <button class:active={tab === 'history'} onclick={() => (tab = 'history')}>History</button>
     <button class:active={tab === 'overview'} onclick={() => (tab = 'overview')}>Classifier overview</button>
   </nav>
 </header>
@@ -31,6 +33,11 @@
     <p class="muted">Loading classifier…</p>
   {:else if tab === 'classify'}
     <Classify {overview} />
+  {:else if tab === 'history'}
+    <History onOpen={(id) => {
+      const url = new URL(location.href); url.searchParams.set('job', id); history.replaceState(null, '', url)
+      tab = 'classify'; window.scrollTo(0, 0)
+    }} />
   {:else}
     <Overview {overview} />
   {/if}
