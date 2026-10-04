@@ -48,3 +48,105 @@ To run data pipeline:
 pip install numpy scipy pillow
 python3 prepare_dataset.py Result Batch_3 Batch_1 Batch_2 
 ```
+
+## Evaluation harness (`evaluation.py`)
+
+Sample-level leave-one-out: every labelled sample (all its views and patches,
+already aggregated into one row) is held out in turn; feature scaling and one
+profile per batch are fitted on the remaining samples only; the held-out sample
+is scored against every batch.
+
+```bash
+pip install -r requirements.txt
+python make_fake_features.py                 # temporary KPI table -> features_fake.csv
+python evaluation.py --features features_fake.csv --out eval_out
+python -m pytest tests
+```
+
+Input: a CSV with `sample_id`, `batch_id` (blank for unseen test samples, which
+are ignored) and numeric feature columns. Columns named
+`kpi__<view>__<name>__<unit>` are grouped so each view carries equal total weight
+(`--view-weights BSE=1,SE=1,InLens=0.5` to change). Any other numeric columns
+(e.g. `emb_0..emb_N` from `encoder.py`) are accepted as-is, so swapping the
+temporary CSV for real KPIs or embeddings needs no code change.
+
+Outputs in `--out`: `predictions.csv` (true/predicted batch, `score_batch_*`,
+margin, `review_flag` for small margins, top contributing features),
+`confusion_matrix.csv`, `mistakes.csv`, `summary.json` (accuracy, counts per
+batch, warnings, label-shuffle chance baseline).
+
+A batch that would have fewer than `--min-train-per-batch` (default 2) samples
+left after holding one out is reported in `warnings`, and its samples are marked
+`evaluable=False` rather than scored against a profile they cannot have.
+
+Scorers are pluggable via `--method`: `profile` (robust-scaled distance to the
+per-batch median) and `gaussian` (diagonal Gaussian, shrunk variances; the
+stand-in for the EM branch). A new approach only needs `fit(X, y)`,
+`scores(x)` and `contributions(x, a, b)`.
+
+## Real KPIs from the images (`build_manifest.py`, `kpis.py`, `kpi_separation.py`)
+
+```bash
+python build_manifest.py --data-dir /path/to/Hackathon-Polaron --out sample_manifest.csv   # Batch_<id>/img_<sample>_<view>.tif; ETD and SE both -> SE view
+python kpis.py --manifest sample_manifest.csv --out features_real.csv                        # one row per sample, ~26 kpi__ + 18 qa__ columns
+python evaluation.py --features features_real.csv --feature-prefix kpi__ --out eval_real     # material KPIs only
+python kpi_separation.py --features features_real.csv --out kpi_separation.csv               # per-KPI within- vs between-batch check
+```
+
+`kpi__<view>__<name>__<unit>` columns are material descriptors (pore / bright-phase
+fraction, pore and particle size d50, solid chord lengths and anisotropy,
+orientation coherence, edge density ...). `qa__<view>__...` columns describe the
+image itself (size, mean/std grey, noise sigma) and should not differ between
+batches if acquisition was consistent; use them to spot imaging drift. Units are
+px because the TIFFs carry no pixel size.
+
+See `reports/kpi_hypothesis_test.md` for the result of running this on the
+labelled batches.
+
+## Frozen-encoder embeddings (second opinion)
+
+`encoder.py` turns each view image into a mean-pooled tile embedding from a
+frozen pretrained backbone (DINOv2 ViT-S/14 or ImageNet ResNet-50) and writes
+`emb__<view>__<model>__<i>` columns in the same one-row-per-sample CSV, so the
+evaluation harness runs unchanged (`--feature-prefix emb__`, `--method cosine`).
+`embedding_probe.py` asks what the embedding encodes: a leave-one-sample-out
+ridge regression from the embedding to each `kpi__` / `qa__` measure.
+Result on the three labelled batches: `reports/encoder_embedding_test.md`.
+
+```bash
+python encoder.py --manifest sample_manifest.csv --model dinov2_vits14 --out features_emb_dinov2.csv
+python evaluation.py --features features_emb_dinov2.csv --feature-prefix emb__ --method cosine --out eval_emb
+python embedding_probe.py --embeddings features_emb_dinov2.csv --targets features_real.csv
+```
+
+## Population tests, KPI reliability and detection limits
+
+`batch_difference_test.py` asks whether two batches differ at all (energy-distance
+permutation test, exact for 7 v 7, plus a baseline self-split "no change" band);
+`kpi_reliability.py` recomputes every KPI on the two halves of each image to find
+which KPIs are stable enough to compare batches with. Results and the implied
+detection limits: `reports/batch_difference_and_reliability.md`.
+
+```bash
+python batch_difference_test.py --features features_real.csv --out batch_difference.csv
+python kpi_reliability.py --manifest sample_manifest.csv --out kpi_reliability.csv
+```
+
+## Augmented tile training (`augment_train.py`, `finetune_tiles.py`)
+
+Trains on aggressively augmented tiles while still holding out whole samples.
+`augment_train.py` caches frozen-DINOv2 embeddings of every tile plus `--n-aug`
+augmented copies (flips, 90° rotations, random crop/rescale; `--photometric`
+adds gamma/contrast/brightness/noise/blur), then fits a logistic head per
+leave-one-sample-out fold and runs the same pipeline on sample-level shuffled
+labels.  `finetune_tiles.py` fine-tunes an ImageNet ResNet-18 end to end on the
+augmented tiles with grouped folds (one held-out sample per batch per fold);
+`--shuffle-seed N` runs the label-shuffle control.  Results:
+`reports/augmented_training_test.md`.
+
+```bash
+python augment_train.py cache --manifest sample_manifest.csv --out cache/dino_aug --n-aug 6 --photometric
+python augment_train.py eval --cache cache/dino_aug --batches 1,2 --out expA_b12.csv
+python finetune_tiles.py --manifest sample_manifest.csv --view BSE --batches 1,2 --epochs 8 --out expB_bse.csv
+python finetune_tiles.py --manifest sample_manifest.csv --view BSE --batches 1,2 --epochs 8 --shuffle-seed 0 --out expB_bse_shuf0.csv
+```

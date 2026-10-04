@@ -2,3 +2,7 @@ __pycache__/
 *.egg-info/
 .venv/
 .DS_Store
+eval_*/
+sample_manifest.csv
+features_emb_*.csv
+embedding_probe.csv
